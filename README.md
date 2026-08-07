@@ -1,4 +1,4 @@
-# Android Interview Handbook
+# Android Handbook
 
 An interview-first engineering handbook for Android developers.
 
@@ -50,7 +50,6 @@ If they understand the underlying engineering idea, the page has succeeded.
 
 ```text
 content/                  Canonical MDX question pages grouped by domain
-QUESTION_INVENTORY.md     Generated planning inventory of stable question IDs
 SYLLABUS.md               Curriculum priorities and study order
 CONTRIBUTING.md           Public contribution rules
 docs/                     Authoring, writing, IDs, references, and publication policy
@@ -58,18 +57,15 @@ templates/                Reusable question templates
 assets/ and diagrams/     Handbook-owned visual resources
 ```
 
-The contents of this directory are designed to become the standalone public `android-interview-handbook` repository. The private DevBits website remains separate and renders this portable content.
+The contents of this directory are designed to become the standalone public `android-handbook` repository. The private DevBits website remains separate and renders this portable content.
 
 ## Sources of truth
 
 - Authored pages and stable IDs: [`content/`](./content/)
 - Curriculum priorities: [`SYLLABUS.md`](./SYLLABUS.md)
-- Planning inventory: [`QUESTION_INVENTORY.md`](./QUESTION_INVENTORY.md)
 - Editorial model: [`docs/WRITING_GUIDE.md`](./docs/WRITING_GUIDE.md)
 - MDX and metadata rules: [`docs/AUTHORING.md`](./docs/AUTHORING.md)
 - Reference requirements: [`docs/REFERENCE_POLICY.md`](./docs/REFERENCE_POLICY.md)
-
-`QUESTION_INVENTORY.md` is useful as a generated planning and review index. It is not the canonical content source and should not be edited independently of the content tree and stable IDs.
 
 ## Contributing
 

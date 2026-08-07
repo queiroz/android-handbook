@@ -1,4 +1,4 @@
-# Contributing to the Android Interview Handbook
+# Contributing to the Android Handbook
 
 Contributions should help Android developers answer realistic interview questions confidently and understand the reasoning behind those answers. Adding more pages is not the goal; adding useful, accurate, focused interview preparation is.
 

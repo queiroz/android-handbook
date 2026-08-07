@@ -58,9 +58,9 @@ A question page should normally contain:
 
 Do not add an internal-implementation section by default. Add internals only when they are necessary to explain the interview answer. Move substantial internals into a separate deep dive.
 
-## Question inventory
+## Curriculum sources of truth
 
-`QUESTION_INVENTORY.md` is a generated planning and review index. Keep it because it makes stable IDs, scope, and placeholder coverage auditable, but do not treat it as a second content source or edit it independently. `SYLLABUS.md` explains curriculum priorities. The content directories and stable IDs are the source of truth for authored pages.
+`SYLLABUS.md` explains curriculum priorities. The authored pages in `content/` and their stable IDs are the source of truth for published and planned question content.
 
 ## Frequency claims
 

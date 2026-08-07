@@ -1,6 +1,6 @@
 # Publishing the handbook as a separate repository
 
-The DevBits site remains private. The Android Interview Handbook becomes public only after it contains enough reviewed material to be useful.
+The DevBits site remains private. The Android Handbook becomes public only after it contains enough reviewed material to be useful.
 
 ## Before extraction
 
@@ -13,7 +13,7 @@ The DevBits site remains private. The Android Interview Handbook becomes public 
 
 ## Create the public repository
 
-Create `github.com/queiroz/android-interview-handbook` from the contents of this `handbook/` directory, not from the entire DevBits repository.
+Create `github.com/queiroz/android-handbook` from the contents of this `handbook/` directory, not from the entire DevBits repository.
 
 The public repository root should therefore contain:
 
@@ -22,7 +22,6 @@ README.md
 CONTRIBUTING.md
 ROADMAP.md
 SYLLABUS.md
-QUESTION_INVENTORY.md
 LICENSE
 content/
 assets/
@@ -36,7 +35,7 @@ templates/
 After the public repository is created, replace the local `handbook/` directory with a subtree import:
 
 ```bash
-git remote add handbook git@github.com:queiroz/android-interview-handbook.git
+git remote add handbook git@github.com:queiroz/android-handbook.git
 
 git subtree add \
   --prefix=handbook \

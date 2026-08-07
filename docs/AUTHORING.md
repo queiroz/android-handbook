@@ -76,7 +76,7 @@ The initial foundation contains draft placeholder files with HTML authoring comm
 
 ## Contribution workflow
 
-1. Choose an existing placeholder from [`../QUESTION_INVENTORY.md`](../QUESTION_INVENTORY.md), or propose a realistic missing interview question.
+1. Choose an existing draft placeholder from `content/`, or propose a realistic missing interview question.
 2. Confirm the stable ID and category.
 3. Research authoritative technical sources.
 4. Write the short answer first.

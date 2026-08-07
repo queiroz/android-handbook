@@ -1,4 +1,4 @@
-# Android Interview Handbook syllabus
+# Android Handbook syllabus
 
 This is the master curriculum map. It is intentionally interview-first and uses the three-track model defined in [`docs/CURRICULUM_MODEL.md`](./docs/CURRICULUM_MODEL.md).
 
@@ -18,7 +18,7 @@ A broad platform topic should not automatically become one oversized interview p
 
 A review of recent public interview reports and question collections shows a consistent modern emphasis on Kotlin and coroutines, Jetpack Compose, lifecycle and state, architecture and dependency injection, testing, networking and persistence, offline-first or background-work scenarios, and discussion of previous projects. Core Android fundamentals still appear, but low-level platform internals are more often follow-up material than opening questions.
 
-This evidence guides prioritisation; it does not justify unsupported frequency scores or company-specific promises. Research notes and sources are recorded in [`research/interview-signal-review-2026-08.md`](./research/interview-signal-review-2026-08.md).
+This evidence guides prioritisation; it does not justify unsupported frequency scores or company-specific promises. Research-backed curriculum changes should cite their supporting sources in the relevant contribution or documentation update.
 
 ## Part I — Android platform and fundamentals
 
