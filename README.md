@@ -2,6 +2,8 @@
 
 An interview-first engineering handbook for Android developers.
 
+🌐 **Read the handbook online:** https://devbits.xyz/android/handbook
+
 The handbook uses realistic interview questions as the entry point, but its broader goal is to teach the mental models, trade-offs, and production judgement used by experienced Android engineers. It covers Android platform fundamentals together with Kotlin, coroutines and Flow, Jetpack Compose, architecture, networking, persistence, security, testing, performance, system design, and senior engineering practice.
 
 A reader should leave each page able to:
@@ -14,8 +16,6 @@ A reader should leave each page able to:
 
 This is not a rewrite of official documentation. API details and platform internals are included only when they support the interview question or the engineering model behind it.
 
-
-
 ## DevBits Manifesto
 
 The DevBits Handbook teaches **engineering judgement through interview questions**.
@@ -25,7 +25,7 @@ Interview questions are the entry point—not the destination.
 Every page should leave the reader with:
 
 - a better interview answer;
-- a deeper understanding of *why* the technology exists;
+- a deeper understanding of _why_ the technology exists;
 - one transferable engineering concept;
 - practical production judgement; and
 - a mental model that remains valuable even if the APIs evolve.
