@@ -1,0 +1,23 @@
+{
+  "title": "Architecture and Design Patterns",
+  "pages": [
+    "index",
+    "what-is-separation-of-concerns",
+    "what-is-the-repository-pattern",
+    "what-is-mvvm",
+    "what-is-mvi",
+    "what-is-the-difference-between-mvvm-and-mvi",
+    "when-would-you-choose-mvvm-over-mvi",
+    "what-is-unidirectional-data-flow",
+    "what-is-clean-architecture",
+    "when-is-clean-architecture-unnecessary-or-excessive",
+    "what-is-a-use-case-or-interactor",
+    "what-is-a-single-source-of-truth",
+    "how-do-you-decide-who-owns-ui-state",
+    "what-is-dependency-inversion",
+    "how-would-you-modularize-a-large-android-application",
+    "what-is-the-difference-between-feature-based-and-layer-based-modularization",
+    "how-do-you-model-one-off-ui-events",
+    "how-do-you-handle-errors-across-app-layers"
+  ]
+}

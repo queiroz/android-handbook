@@ -1,0 +1,16 @@
+{
+  "title": "Android Runtime",
+  "pages": [
+    "index",
+    "what-is-dalvik",
+    "what-is-art",
+    "what-is-the-difference-between-dalvik-and-art",
+    "what-is-dex-and-why-does-android-use-it",
+    "what-is-the-difference-between-jit-and-aot-compilation",
+    "how-does-modern-art-use-interpretation-jit-aot-and-profiles",
+    "what-is-garbage-collection-and-how-can-it-affect-app-performance",
+    "can-you-force-garbage-collection-on-android-and-should-you",
+    "what-is-multidex-and-when-is-it-relevant",
+    "what-are-baseline-profiles-and-why-do-they-matter"
+  ]
+}

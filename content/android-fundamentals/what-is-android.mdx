@@ -1,0 +1,100 @@
+---
+id: "AF-001"
+title: "What is Android?"
+description: "Explain Android as both an operating system and an application platform—not just a mobile OS."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 4
+answerTime: "~30 sec"
+status: "published"
+tags:
+  - android
+  - fundamentals
+  - platform
+  - operating-system
+prerequisites: []
+related:
+  - AF-002
+  - AF-019
+  - AR-002
+---
+
+<ShortAnswer>
+
+Android is both an operating system and an application platform built on top of the Linux kernel. It provides the runtime, application framework, system services, security model, and application components that Android apps rely on.
+
+In day-to-day Android development, we mostly interact with the Android Framework APIs while the platform manages processes, lifecycle, permissions, resources, storage, and access to device capabilities.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand Android as more than a phone operating system. A good answer distinguishes the Linux-based operating-system foundation from the application platform that developers build on.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid answering only:
+
+> "Android is a Linux-based operating system for phones."
+
+That is not completely wrong, but it misses the runtime, framework APIs, system services, application model, and security model that make Android an application platform.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+If the interviewer asks you to elaborate, explain Android from the bottom up. Linux provides the operating system foundation, while the Android Runtime, Framework, and system services build the application platform that apps rely on.
+
+Android uses the Linux kernel for low-level responsibilities such as process scheduling, memory management, networking, security, and device drivers. Above it, Android provides the runtime, framework APIs, and system services used by applications.
+
+<PlatformStack />
+
+<Remember>
+
+Developers normally work with the **Android Framework**, not directly with the Linux kernel.
+
+</Remember>
+
+ART and application startup are natural follow-up topics rather than part of the opening answer.
+
+## Follow-up questions
+
+<FollowUp>
+
+- [What is Context in Android?](/android/handbook/android-fundamentals/what-is-context-in-android)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains Android as layers with clear responsibilities instead of simply listing technologies.
+- Clearly distinguishes the Linux kernel from the Android Framework.
+- Uses precise terms such as runtime, system services, and application platform without turning the answer into a platform lecture.
+- Gives a concise opening answer and leaves ART, process startup, and other internals for follow-up questions.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- Android is both an operating system and an application platform.
+- Most Android development happens through Framework APIs rather than direct kernel access.
+- A strong opening answer should take roughly about 30 seconds.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Platform architecture — Android Developers](https://developer.android.com/guide/platform)
+- [Application fundamentals — Android Developers](https://developer.android.com/guide/components/fundamentals)
+- [Application Sandbox — Android Open Source Project](https://source.android.com/docs/security/app-sandbox)
+
+</ReferenceList>

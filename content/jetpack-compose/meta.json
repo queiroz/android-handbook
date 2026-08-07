@@ -1,0 +1,26 @@
+{
+  "title": "Jetpack Compose",
+  "pages": [
+    "index",
+    "what-is-the-difference-between-the-view-system-and-jetpack-compose",
+    "what-is-composition",
+    "what-is-recomposition-and-what-triggers-it",
+    "how-does-compose-decide-what-to-recompose",
+    "what-is-the-difference-between-remember-and-remembersaveable",
+    "what-is-state-hoisting-and-why-is-it-useful",
+    "what-is-the-difference-between-a-stateless-and-stateful-composable",
+    "how-should-you-observe-viewmodel-state-in-compose",
+    "what-are-the-compose-side-effect-apis-and-when-do-you-use-them",
+    "when-should-data-loading-happen-in-launchedeffect-versus-viewmodel-init",
+    "what-is-derivedstateof-and-when-is-it-useful",
+    "what-is-snapshotflow",
+    "what-is-the-compose-snapshot-system",
+    "what-are-compositionlocals-and-when-should-you-avoid-them",
+    "what-are-mutablestatelistof-and-mutablestatemapof",
+    "what-is-saveablestateholder",
+    "what-is-the-composition-lifecycle",
+    "how-do-navhost-and-navcontroller-work",
+    "how-do-you-navigate-between-screens-in-compose",
+    "how-do-you-diagnose-unnecessary-recompositions"
+  ]
+}

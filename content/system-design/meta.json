@@ -1,0 +1,13 @@
+{
+  "title": "Mobile System Design",
+  "pages": [
+    "index",
+    "how-would-you-design-an-offline-first-notes-app",
+    "how-would-you-design-a-paginated-social-feed",
+    "how-would-you-design-a-chat-application",
+    "how-would-you-design-image-loading-and-caching",
+    "how-would-you-design-a-secure-banking-flow",
+    "how-would-you-design-location-tracking",
+    "how-would-you-design-a-download-manager"
+  ]
+}

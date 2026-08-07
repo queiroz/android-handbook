@@ -1,0 +1,15 @@
+{
+  "title": "Dependency Injection",
+  "pages": [
+    "index",
+    "what-is-dependency-injection-and-why-use-it",
+    "what-is-the-difference-between-constructor-and-field-injection",
+    "what-are-scopes-in-dependency-injection",
+    "what-is-dagger",
+    "what-is-hilt-and-what-does-it-add-to-dagger",
+    "how-do-you-inject-a-viewmodel-with-hilt",
+    "what-are-qualifiers-and-when-are-they-needed",
+    "what-is-assisted-injection",
+    "what-are-the-trade-offs-between-hilt-and-koin"
+  ]
+}

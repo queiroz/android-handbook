@@ -1,0 +1,24 @@
+{
+  "title": "Kotlin",
+  "pages": [
+    "index",
+    "what-is-the-difference-between-val-var-and-const-val",
+    "what-is-the-difference-between-lateinit-and-lazy",
+    "what-is-the-difference-between-any-unit-and-nothing",
+    "what-are-data-classes-and-when-should-you-use-them",
+    "what-are-sealed-classes-and-sealed-interfaces",
+    "what-is-the-difference-between-an-object-declaration-and-a-companion-object",
+    "what-is-the-difference-between-safe-call-elvis-and-not-null-assertion-in-kotlin",
+    "what-is-the-difference-between-a-lambda-and-a-higher-order-function",
+    "what-is-the-difference-between-map-filter-and-flatmap",
+    "what-is-an-extension-function",
+    "what-is-an-inline-function",
+    "what-does-reified-mean-in-kotlin",
+    "what-is-encapsulation",
+    "what-is-the-difference-between-and-in-kotlin",
+    "what-is-the-difference-between-list-mutablelist-and-immutable-data",
+    "how-does-kotlin-null-safety-differ-from-java",
+    "how-would-you-safely-parse-a-string-into-another-type",
+    "what-is-variance-in-kotlin-generics"
+  ]
+}

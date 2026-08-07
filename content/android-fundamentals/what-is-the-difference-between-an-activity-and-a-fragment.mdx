@@ -1,0 +1,146 @@
+---
+id: "AF-003"
+title: "What is the difference between an Activity and a Fragment?"
+description: "Explain the different responsibilities of Activities and Fragments in modern Android."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 5
+answerTime: "~30 sec"
+status: "published"
+tags:
+  - activity
+  - fragment
+  - components
+  - lifecycle
+prerequisites:
+  - AF-001
+  - AF-002
+related:
+  - AF-004
+  - AF-005
+  - AF-002
+---
+
+<ShortAnswer>
+
+An **Activity** owns the application's window and acts as the system entry point for a screen. A **Fragment** owns a reusable portion of UI and behaviour inside that window.
+
+Activities participate directly in tasks and the back stack and can receive Intents from the system. Fragments have their own lifecycle, plus a separate view lifecycle, but depend on their host Activity for the window and application-level entry point.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand ownership and responsibility rather than simply comparing APIs or lifecycle callbacks.
+
+A good answer distinguishes an Activity's responsibility for the window and system entry point from a Fragment's responsibility for a portion of UI inside that Activity. It should also reflect modern Android, where many applications use one Activity and compose their screens with Fragments or Jetpack Compose.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid saying:
+
+> "A Fragment is just a lightweight Activity."
+
+A Fragment is not a smaller Activity. It cannot provide its own application window or exist independently of a host. It has different responsibilities and a lifecycle that is coordinated with the Activity hosting it.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+| Activity | Fragment |
+| --- | --- |
+| Owns the application window | Owns a portion of the UI |
+| Started by the Android system via an Intent | Hosted by an Activity |
+| Participates in the task and back stack | Depends on the host Activity for the window |
+| Can host Fragments or Compose UI | Has its own Fragment lifecycle and a separate view lifecycle |
+| Represents the application entry point | Represents reusable UI and behaviour |
+
+A common modern architecture is a **single Activity** that hosts navigation. Compose-first applications often use a single Activity and may not use Fragments at all, while many production applications still rely on Fragments for modular navigation and reusable UI.
+
+
+
+**When should you use each?**
+
+| Scenario | Recommended component |
+| --- | --- |
+| Application entry point | Activity |
+| Host application navigation | Activity |
+| Reusable screen section | Fragment |
+| Single-Activity application | Activity + Fragments (or Compose destinations) |
+## Code example
+
+```kotlin
+class MainActivity : AppCompatActivity(R.layout.activity_main) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        if (savedInstanceState == null) {
+            supportFragmentManager.commit {
+                setReorderingAllowed(true)
+                // Activity owns the window and container.
+            replace(R.id.fragmentContainer, HomeFragment())
+            }
+        }
+    }
+}
+
+class HomeFragment : Fragment(R.layout.fragment_home)
+```
+
+The Activity owns the window and the container. `HomeFragment` contributes one portion of the UI inside that container. The `savedInstanceState == null` check prevents adding the same Fragment again after configuration changes because the FragmentManager automatically restores existing Fragments.
+
+<Remember>
+
+**Interview tip:** Don't compare Activities and Fragments by size. Compare them by **responsibility**.
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [Can you walk through the Activity lifecycle?](/android/handbook/android-fundamentals/can-you-walk-through-the-activity-lifecycle)
+- [Can you describe the Fragment lifecycle and Fragment view lifecycle?](/android/handbook/android-fundamentals/can-you-describe-the-fragment-lifecycle-and-fragment-view-lifecycle)
+- [What is Context in Android?](/android/handbook/android-fundamentals/what-is-context-in-android)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains responsibilities instead of implementation details.
+- Distinguishes the Activity lifecycle from the Fragment lifecycle and Fragment view lifecycle.
+- Recognises the single-Activity architecture as a common modern approach.
+- Understands that Compose can reduce or eliminate Fragments without implying Fragments are obsolete.
+- Recognises single-Activity architecture as a common approach without implying that every modern application must use Fragments.
+- Explains that Compose-first applications may use few or no Fragments, while many production applications still depend on them.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- An Activity provides the window and can be an application entry point.
+- A Fragment represents reusable UI and behaviour hosted by an Activity.
+- Activities participate directly in tasks and the back stack; Fragments do not.
+- Fragments have their own lifecycle and a separate view lifecycle.
+- Activities can exist without Fragments; Fragments cannot exist without a host Activity.
+- Modern applications often use one Activity with Fragment or Compose-based navigation.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Introduction to Activities — Android Developers](https://developer.android.com/guide/components/activities/intro-activities)
+- [Fragments — Android Developers](https://developer.android.com/guide/fragments)
+- [Fragment lifecycle — Android Developers](https://developer.android.com/guide/fragments/lifecycle)
+- [Navigation with Compose — Android Developers](https://developer.android.com/develop/ui/compose/navigation)
+
+</ReferenceList>

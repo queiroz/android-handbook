@@ -1,0 +1,13 @@
+{
+  "title": "Architecture Components",
+  "pages": [
+    "index",
+    "what-is-a-viewmodel-and-how-does-it-survive-configuration-changes",
+    "does-viewmodel-survive-process-death",
+    "what-is-savedstatehandle",
+    "what-is-the-difference-between-livedata-and-stateflow",
+    "what-is-room-and-how-does-it-compare-with-raw-sqlite",
+    "what-is-lifecycle-and-why-does-lifecycle-awareness-matter",
+    "what-is-repeatonlifecycle-and-why-is-it-useful"
+  ]
+}

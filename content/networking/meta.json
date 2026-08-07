@@ -1,0 +1,17 @@
+{
+  "title": "Networking",
+  "pages": [
+    "index",
+    "what-are-the-benefits-of-retrofit",
+    "what-is-the-difference-between-retrofit-and-httpurlconnection",
+    "what-is-the-role-of-okhttp-in-a-retrofit-stack",
+    "what-is-the-difference-between-an-interceptor-and-an-authenticator",
+    "how-do-you-add-bearer-tokens-to-requests",
+    "how-do-you-implement-token-refresh-safely",
+    "how-do-you-communicate-securely-with-a-server-from-an-android-app",
+    "what-is-certificate-pinning-and-what-are-its-trade-offs",
+    "how-do-you-handle-timeouts-retries-and-transient-failures",
+    "what-are-the-trade-offs-between-gson-moshi-and-kotlinx-serialization",
+    "how-would-you-cache-network-responses"
+  ]
+}

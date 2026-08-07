@@ -1,0 +1,175 @@
+---
+id: "AF-005"
+title: "Can you describe the Fragment lifecycle and Fragment view lifecycle?"
+description: "Explain why a Fragment and its view have different lifetimes, and how that affects UI work and cleanup."
+difficulty: "intermediate"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 7
+answerTime: "~45 sec"
+status: "published"
+tags:
+  - fragment
+  - lifecycle
+  - view-binding
+  - coroutines
+prerequisites:
+  - AF-003
+  - AF-004
+related:
+  - AF-018
+  - AF-019
+---
+
+<ShortAnswer>
+
+A Fragment has **two related lifecycles**: the lifecycle of the Fragment instance and the lifecycle of its view.
+
+The Fragment instance moves through callbacks such as `onAttach()`, `onCreate()`, `onStart()`, `onResume()`, and eventually `onDestroy()`. Its view exists only between `onCreateView()` and `onDestroyView()`. The Fragment can therefore remain alive after its view has been destroyed—for example, when a destination is placed on the back stack—and a new view can be created later for the same Fragment instance.
+
+That distinction determines ownership: Fragment-level state can outlive the view, but view bindings, adapters, listeners, and UI collection must be tied to the **view lifecycle** and released in `onDestroyView()`.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand that a Fragment is not a single lifetime containing a permanent view hierarchy.
+
+A strong answer explains why the separate view lifecycle exists, where UI setup and cleanup belong, and why observing UI state with the Fragment itself as the `LifecycleOwner` can keep work alive after the view has gone away.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid treating the Fragment and its view as though they are destroyed together.
+
+A common bug is keeping a `ViewBinding`, adapter, listener, or other view reference until `onDestroy()`. The Fragment may remain managed by `FragmentManager` after `onDestroyView()`, so that reference retains a view hierarchy that should already be eligible for collection.
+
+Also avoid collecting UI state against the Fragment lifecycle when the collector updates views. Use `viewLifecycleOwner` so collection stops when the current view is destroyed.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+| Fragment lifecycle | Fragment view lifecycle |
+| --- | --- |
+| Represents the lifetime of the Fragment instance | Represents one particular view hierarchy created by that Fragment |
+| Begins as the Fragment is attached and created | Begins after `onCreateView()` returns a view |
+| Can continue while no Fragment view exists | Ends when `onDestroyView()` is called |
+| Owns non-UI state and coordinates the screen | Owns bindings, view listeners, adapters, and UI observation |
+| Ends in `onDestroy()` and `onDetach()` | Can be created again for the same Fragment instance |
+
+**Mental model:** The **Fragment survives; the View is disposable.** The Fragment may stay alive while its View is destroyed and recreated multiple times.
+
+The typical creation path is:
+
+`onAttach()` → `onCreate()` → `onCreateView()` → `onViewCreated()` → `onStart()` → `onResume()`
+
+When the Fragment's UI is removed, the view moves down through its lifecycle and `onDestroyView()` is called. The Fragment instance may still exist. If the user navigates back, the Fragment can receive `onCreateView()` and `onViewCreated()` again with a new view hierarchy.
+
+This is the mental model to keep:
+
+```text
+Fragment instance:  onCreate() ───────────────────────────── onDestroy()
+                                  │                        │
+First view:                       onCreateView() ─ onDestroyView()
+                                                        │
+Recreated view:                                         onCreateView() ─ onDestroyView()
+```
+
+Use `onCreate()` for non-view initialization that belongs to the Fragment instance. Inflate or provide the layout in `onCreateView()`, then configure views, adapters, listeners, and UI observation in `onViewCreated()`.
+
+Clean up anything that directly references the current view hierarchy in `onDestroyView()`. Cleanup that belongs to the Fragment instance itself belongs later, when that instance is actually destroyed.
+
+## Code example
+
+```kotlin
+class OrdersFragment : Fragment(R.layout.fragment_orders) {
+    private var _binding: FragmentOrdersBinding? = null
+    private val binding get() = requireNotNull(_binding)
+    private val viewModel: OrdersViewModel by viewModels()
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        _binding = FragmentOrdersBinding.bind(view)
+
+        binding.ordersList.adapter = OrdersAdapter(::openOrder)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    binding.progress.isVisible = state.loading
+                    binding.ordersList.isVisible = !state.loading
+                }
+            }
+        }
+    }
+
+    override fun onDestroyView() {
+        binding.ordersList.adapter = null
+        _binding = null
+        super.onDestroyView()
+    }
+
+    private fun openOrder(orderId: String) = Unit
+}
+```
+
+The binding and adapter belong to the current view hierarchy, so they are cleared in `onDestroyView()`. The `ViewModel` is scoped to the Fragment and can continue holding screen state while that view is recreated.
+
+Using `viewLifecycleOwner.repeatOnLifecycle()` ties collection to the view rather than the longer-lived Fragment instance. Collection starts when the view reaches `STARTED`, stops when it falls below that state, and is cancelled permanently when that view is destroyed.
+
+<Remember>
+
+**Interview tip:** A Fragment can outlive its view. Anything that touches views must follow the **view lifecycle**, not merely the Fragment lifecycle.
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [What is the difference between an Activity and a Fragment?](/android/handbook/android-fundamentals/what-is-the-difference-between-an-activity-and-a-fragment)
+- [Can you walk through the Activity lifecycle?](/android/handbook/android-fundamentals/can-you-walk-through-the-activity-lifecycle)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Starts with the two-lifecycle mental model instead of reciting every callback.
+- Explains that one Fragment instance can create more than one view hierarchy over time.
+- Places UI setup in `onViewCreated()` and view-reference cleanup in `onDestroyView()`.
+- Uses `viewLifecycleOwner` for LiveData observation, coroutine scopes, and lifecycle-aware Flow collection that updates views.
+- Understands that `ViewModel` state and view state have different ownership and restoration guarantees.
+- Recognises that back-stack behaviour depends on the Fragment transaction: replacing or detaching can destroy a view, while hiding a Fragment only changes view visibility.
+- Avoids presenting Fragments as mandatory in Compose-first applications while still understanding them deeply in View-based and hybrid codebases.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- A Fragment instance and its current view hierarchy have different lifetimes.
+- The view exists between `onCreateView()` and `onDestroyView()` and may be recreated.
+- Bindings, adapters, listeners, and UI collectors belong to the view lifecycle.
+- Clear references to the view hierarchy in `onDestroyView()`.
+- The Fragment lifecycle and View lifecycle often end at different times.
+- Use `viewLifecycleOwner` when observing state that renders into Fragment views.
+- The Fragment survives; the View may be recreated many times.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Fragment lifecycle — Android Developers](https://developer.android.com/guide/fragments/lifecycle)
+- [Fragments — Android Developers](https://developer.android.com/guide/fragments)
+- [View binding — Android Developers](https://developer.android.com/topic/libraries/view-binding)
+- [Use Kotlin coroutines with lifecycle-aware components — Android Developers](https://developer.android.com/topic/libraries/architecture/views/coroutines-views)
+- [Fragment transactions — Android Developers](https://developer.android.com/guide/fragments/transactions)
+
+</ReferenceList>

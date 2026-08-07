@@ -1,0 +1,12 @@
+{
+  "title": "Coding and Project Discussion",
+  "pages": [
+    "index",
+    "how-would-you-explain-the-architecture-of-your-most-recent-android-project",
+    "how-do-you-communicate-assumptions-during-a-coding-interview",
+    "how-would-you-review-and-refactor-unfamiliar-android-code",
+    "how-would-you-implement-a-debounce-function-in-kotlin",
+    "how-would-you-parse-and-validate-structured-input-safely",
+    "how-would-you-approach-a-take-home-android-assignment"
+  ]
+}

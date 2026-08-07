@@ -1,0 +1,18 @@
+{
+  "title": "Data Persistence and Paging",
+  "pages": [
+    "index",
+    "what-is-the-difference-between-sharedpreferences-and-datastore",
+    "what-is-the-difference-between-preferences-datastore-and-proto-datastore",
+    "what-is-the-difference-between-parcelable-and-serializable",
+    "what-is-room-and-why-use-it",
+    "how-do-room-migrations-work",
+    "why-are-database-indexes-important",
+    "what-is-the-jetpack-paging-library",
+    "how-would-you-page-a-large-dataset",
+    "what-is-remotemediator",
+    "how-would-you-design-an-offline-first-data-layer",
+    "what-is-a-single-source-of-truth-in-an-offline-first-app",
+    "how-do-you-load-and-cache-images-from-the-network"
+  ]
+}

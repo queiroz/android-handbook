@@ -1,0 +1,185 @@
+---
+id: "AF-007"
+title: "What is a PendingIntent and why is it needed?"
+description: "Explain how Android lets another process perform a predefined action later on your app's behalf."
+difficulty: "intermediate"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 5
+answerTime: "~30 sec"
+status: "published"
+tags:
+  - pending-intent
+  - intent
+  - notifications
+  - security
+prerequisites:
+  - AF-006
+related:
+  - AF-010
+  - AF-011
+  - AF-014
+---
+
+<ShortAnswer>
+
+A **PendingIntent** is permission for another process to perform one predefined action on behalf of your app later.
+
+Android needs it because your app does not always own the future interaction. System UI owns notification taps, AlarmManager owns alarm delivery, and the launcher owns Home Screen widget clicks. Those processes should not receive unrestricted access to your application, so your app gives Android permission to perform only the action you authorised.
+
+Think of it as a **signed permission slip**, not simply an Intent that runs later.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand **why Android needs delegated execution across process boundaries**.
+
+A strong answer explains that another process may own the interaction, that a normal Intent only describes the action, and that a PendingIntent safely grants permission to perform that action using your app's identity.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid saying that a PendingIntent is simply “an Intent that runs later.”
+
+That describes when it may run, but not why Android invented it. An Intent describes an action. A PendingIntent grants another process permission to perform one specific action on your app's behalf.
+
+Also avoid making every PendingIntent mutable “just in case.” If the holder does not need to change the wrapped Intent, immutable should be the default.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Why Android needed PendingIntent
+
+Imagine your app posts a notification for an order update.
+
+Later, Android kills your process. The user taps the notification from System UI.
+
+Now ask the important question:
+
+> **Who should be allowed to open your Activity?**
+
+System UI cannot be given unrestricted access to launch arbitrary components inside your application. Instead, your app creates a PendingIntent that authorises one predefined action.
+
+```text
+Your app defines an action
+            │
+            ▼
+Android keeps permission to perform it
+            │
+            ▼
+Your process may disappear
+            │
+            ▼
+Another process owns the interaction
+(System UI, AlarmManager, or the launcher)
+            │
+            ▼
+Android performs the authorised action
+```
+
+That is the core mental model:
+
+| Intent | PendingIntent |
+| --- | --- |
+| Describes what should happen | Grants permission to make it happen |
+| Used directly by your app | Can be handed to another process |
+| Does not delegate authority | Delegates one predefined action using your app's identity |
+
+The same problem appears throughout Android:
+
+- **Notifications** – System UI owns the tap.
+- **AlarmManager** – Android owns the timer and may deliver it after your process is gone.
+- **App widgets** – The launcher owns the Home Screen interaction.
+- **Foreground-service actions** – System UI owns the notification buttons.
+
+**The owner changes. The solution does not.**
+
+From a production perspective, treat a PendingIntent as a security capability. Grant only the action the other process needs. Use an explicit target and make it immutable by default; use mutability only when the receiving system component genuinely needs to add or change data, such as an inline notification reply.
+
+One common bug is several notifications opening the wrong item. Android may reuse an equivalent PendingIntent, so independent actions should have independent identities—for example, a stable request code derived from the item they represent.
+
+## Code example
+
+```kotlin
+fun createOrderNotification(
+    context: Context,
+    orderId: Long,
+): Notification {
+    val openOrderIntent = Intent(
+        context,
+        OrderDetailsActivity::class.java,
+    ).putExtra(EXTRA_ORDER_ID, orderId)
+
+    val openOrder = PendingIntent.getActivity(
+        context,
+        orderId.hashCode(),
+        openOrderIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or
+            PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    return NotificationCompat.Builder(context, ORDERS_CHANNEL_ID)
+        .setSmallIcon(R.drawable.ic_order)
+        .setContentTitle(context.getString(R.string.order_updated))
+        .setContentIntent(openOrder)
+        .setAutoCancel(true)
+        .build()
+}
+```
+
+System UI never receives direct access to `OrderDetailsActivity`. It receives permission to launch only this predefined screen. The PendingIntent is immutable because System UI does not need to change the destination, while the request code keeps each order notification independent.
+
+<Remember>
+
+**An Intent says what to do. A PendingIntent says who is allowed to make it happen later on your app's behalf.**
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [What is the difference between an explicit and implicit Intent?](/android/handbook/android-fundamentals/what-is-the-difference-between-an-explicit-and-implicit-intent)
+- [What is a Service?](/android/handbook/android-fundamentals/what-is-a-service)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Frames PendingIntent as delegated authority across a process boundary, not merely delayed execution.
+- Explains the problem Android had to solve: another process needs to perform one app-owned action without receiving unrestricted access to the app.
+- Uses a notification tap to show why the app process does not need to remain alive.
+- Distinguishes the wrapped Intent from the system-managed permission token.
+- Recognises that notifications, alarms, widgets, and system-owned controls all solve the same underlying problem.
+- Defaults to explicit, immutable PendingIntents and explains the limited cases that genuinely require mutability.
+- Treats every PendingIntent as a security capability and grants only the minimum action required.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- PendingIntent exists because another process sometimes owns the interaction.
+- It grants permission to perform one predefined action on behalf of your app.
+- Android keeps that permission, so the action can still happen after your process has been killed.
+- Notifications, alarms, app widgets, and system-owned controls are common examples.
+- Use an explicit target and `FLAG_IMMUTABLE` by default.
+- Think of a PendingIntent as a security capability, not a delayed Intent.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [PendingIntent API reference — Android Developers](https://developer.android.com/reference/android/app/PendingIntent)
+- [Pending intents security risks — Android Developers](https://developer.android.com/privacy-and-security/risks/pending-intent)
+- [Start an Activity from a notification — Android Developers](https://developer.android.com/develop/ui/views/notifications/navigation)
+
+</ReferenceList>

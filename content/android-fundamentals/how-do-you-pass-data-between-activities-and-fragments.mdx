@@ -1,0 +1,201 @@
+---
+id: "AF-009"
+title: "How do you pass data between Activities and Fragments?"
+description: "Explain how Android components exchange data while preserving clear ownership and a single source of truth."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
+tags:
+  - navigation
+  - bundle
+  - intent
+  - fragment
+  - data-ownership
+prerequisites:
+  - AF-008
+related:
+  - AF-003
+  - AF-006
+  - AF-017
+---
+
+<ShortAnswer>
+
+Activities usually receive data through **Intent extras**, while Fragments receive **arguments**. Both mechanisms use a `Bundle` underneath.
+
+The important decision is not only which API to call, but **what data should cross the component boundary**. For small transient values, such as a search query, filter, `Uri`, or stable ID, pass the value directly. For domain data, I usually pass an identifier such as `orderId` and let the destination load the current object from its repository or other source of truth.
+
+That keeps ownership clear, avoids stale copies, supports recreation, and keeps screens loosely coupled. A shared ViewModel is useful only when the data genuinely belongs to a shared lifecycle rather than to navigation itself.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+This question isn't really about whether you know `putExtra()` or Fragment arguments. Most interviewers assume you do. They're trying to understand whether you know what information should cross a component boundary, what should remain owned by the source of truth, and how experienced Android engineers keep screens loosely coupled.
+
+A strong answer explains that Activities use Intent extras, Fragments use arguments, and Navigation builds on the same idea. It then goes further: the destination should receive only the information it needs to continue the work, while durable business data remains owned by a repository, database, or another source of truth.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid treating navigation as transferring ownership of an object from one screen to another.
+
+Passing a complete `Order`, `User`, or other domain model may look convenient, but it creates a serialized snapshot that can become stale, duplicates application state, couples screens to the same model shape, and increases the amount of data placed in a Bundle.
+
+Also avoid using a shared ViewModel merely to bypass arguments. A shared ViewModel is appropriate when multiple destinations genuinely collaborate on state owned by the same lifecycle. It should not become a hidden navigation channel.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Start with ownership, not the API
+
+Imagine an order list opening an order details screen.
+
+The first question is not:
+
+> How do I pass the `Order` object?
+
+It is:
+
+> Who owns the order, and what is the smallest stable piece of information the next screen needs?
+
+Usually, the repository owns the `Order`. The details screen only needs this:
+
+```text
+orderId = 42
+```
+
+The destination can then load or observe the latest order from the source of truth. Nothing owns the Order except the repository. Navigation simply carries enough information for the next screen to find it.
+
+```text
+Order repository
+      │
+      │ owns Order data
+      ▼
+Order list
+      │
+      │ passes orderId
+      ▼
+Order details
+      │
+      │ loads or observes Order
+      ▼
+Current source-of-truth value
+```
+
+**Navigation moved the reference, not the ownership.** The object itself did not move between screens. Only enough information to continue the work crossed the boundary.
+
+Throughout this example, notice that the destination never receives the `Order`. It only receives enough information to find the latest one.
+
+This prevents stale copies when the order changes, keeps recreation straightforward, and allows each destination to remain independent.
+
+### Choose the mechanism from the boundary
+
+| Boundary | Typical mechanism | Appropriate data |
+| --- | --- | --- |
+| Activity to Activity | Intent extras | IDs, flags, query text, small values, `Uri` |
+| Activity to Fragment | Fragment arguments | Data required to create the Fragment |
+| Fragment to Fragment | Navigation arguments | Route data needed by the destination |
+| Sibling Fragments sharing screen state | Activity- or graph-scoped ViewModel | State genuinely owned by their shared lifecycle |
+| Durable business data | Repository or database | The actual domain state and source of truth |
+
+The mechanisms differ, but the principle stays the same: **pass the smallest stable value that preserves clear ownership.**
+
+That value is often an ID, but it may also be a search query, selected filter, enum, date range, or `Uri`. Small immutable value objects can also be reasonable when the value itself is the navigation input and does not represent shared mutable business state.
+
+### Production considerations
+
+Copying large objects between screens creates unnecessary serialization, duplicated state, and stale snapshots. Arguments and extras are intentionally designed for small pieces of transient information, so keep Bundles lightweight and avoid transporting complete object graphs. Large lists, bitmaps, and complex models can also contribute to Binder transaction-size failures.
+
+Passing an ID is also not a magic rule. The destination must be able to handle missing, deleted, or unavailable data. In production, that means loading states, error handling, and a clear fallback when the requested record no longer exists.
+
+## Code example
+
+```kotlin
+private const val EXTRA_ORDER_ID = "order_id"
+
+class OrderListActivity : AppCompatActivity() {
+
+    private fun openOrder(orderId: Long) {
+        val intent = Intent(this, OrderDetailsActivity::class.java)
+            .putExtra(EXTRA_ORDER_ID, orderId)
+
+        startActivity(intent)
+    }
+}
+```
+
+```kotlin
+class OrderDetailsViewModel(
+    savedStateHandle: SavedStateHandle,
+    repository: OrderRepository
+) : ViewModel() {
+
+    private val orderId: Long = checkNotNull(savedStateHandle[EXTRA_ORDER_ID])
+
+    val order = repository.observeOrder(orderId)
+}
+```
+
+Notice that the Activity only passes the stable identifier. The important line is `repository.observeOrder(orderId)`: navigation transports the identifier, while the repository remains the single source of truth for the current `Order`. `SavedStateHandle` simply exposes the navigation value to the ViewModel.
+
+For a Fragment destination, the same idea applies through Fragment or Navigation arguments rather than Intent extras.
+
+<Remember>
+
+**Components exchange information, not ownership. Pass only what the next component needs to continue the work.**
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [What is a Bundle and when would you use one?](/android/handbook/android-fundamentals/what-is-a-bundle-and-when-would-you-use-one)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Covers the basic mechanics: Intent extras for Activities, arguments for Fragments, and Navigation arguments for destinations.
+- Starts with data ownership and component boundaries instead of immediately choosing `Parcelable` or another transport format.
+- Passes small, stable navigation inputs while keeping durable business data in a repository, database, or another source of truth.
+- Recognizes that passing an ID reduces stale snapshots but still requires loading, missing-data, and error states.
+- Uses a shared ViewModel only when state genuinely belongs to a shared Activity or navigation-graph lifecycle.
+- Understands that complete immutable values can sometimes be appropriate when the value itself is the input, rather than applying “always pass IDs” as a rigid rule.
+- Keeps extras and arguments small because Bundle-backed transport has serialization and transaction-size constraints.
+- Distinguishes navigation data from shared UI state and from durable application state.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- Activities use Intent extras; Fragments use arguments; Navigation arguments build on the same transport idea.
+- Choose what crosses the boundary before choosing the API.
+- Pass the smallest stable value the destination needs, often an ID, query, filter, or `Uri`.
+- Keep business data in its source of truth instead of copying complete domain objects between screens.
+- Use a shared ViewModel for genuinely shared lifecycle-owned state, not as a replacement for navigation arguments.
+- Keep Bundle-backed payloads small and handle the case where referenced data is missing or unavailable.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Intents and intent filters — Android Developers](https://developer.android.com/guide/components/intents-filters)
+- [Pass data between destinations — Android Developers](https://developer.android.com/guide/navigation/use-graph/pass-data)
+- [Communicate with fragments — Android Developers](https://developer.android.com/guide/fragments/communicate)
+- [Parcelables and Bundles — Android Developers](https://developer.android.com/guide/components/activities/parcelables-and-bundles)
+- [Saved State module for ViewModel — Android Developers](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-savedstate)
+
+</ReferenceList>

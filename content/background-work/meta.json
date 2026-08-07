@@ -1,0 +1,13 @@
+{
+  "title": "Background Work",
+  "pages": [
+    "index",
+    "when-should-you-use-workmanager",
+    "what-is-the-difference-between-workmanager-jobscheduler-and-alarmmanager",
+    "when-is-a-foreground-service-appropriate",
+    "how-do-you-manage-long-running-background-tasks",
+    "how-do-workmanager-constraints-and-retries-work",
+    "what-restrictions-apply-to-background-execution",
+    "how-would-you-design-reliable-background-synchronization"
+  ]
+}

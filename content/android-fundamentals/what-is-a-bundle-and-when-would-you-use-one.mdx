@@ -1,0 +1,178 @@
+---
+id: "AF-008"
+title: "What is a Bundle and when would you use one?"
+description: "Explain how Android carries small pieces of transient state between components and across recreation."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 5
+answerTime: "~30 sec"
+status: "published"
+tags:
+  - bundle
+  - state
+  - intent
+  - saved-instance-state
+prerequisites:
+  - AF-006
+related:
+  - AF-009
+  - AF-017
+  - AF-018
+---
+
+<ShortAnswer>
+
+A **Bundle** is Android's standard container for transporting small pieces of state between components and for restoring UI state after recreation.
+
+Instead of every framework API inventing its own way to pass values, Android reuses the same container across **Intent extras, Fragment arguments, Navigation arguments, and saved instance state**.
+
+Think of a Bundle as a **suitcase for transient state**. It carries data to the next destination, but it doesn't own, persist, or manage that data. Carry only stable identifiers and lightweight values, then reload larger or durable data from the proper source.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand the difference between **carrying state** and **owning or persisting state**.
+
+A strong answer explains where Bundles appear, why they should remain small, and why passing an ID is usually safer than packing an entire object graph into one.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid treating a Bundle like a database or an in-memory object store.
+
+Putting large lists, bitmaps, repositories, or complete domain models into a Bundle couples screens to serialized snapshots and can exceed Android's transaction limits. A Bundle should carry only the information required to identify or reconstruct the next state.
+
+Also avoid saying that a Bundle survives indefinitely. Saved-state APIs may use Bundles to restore transient UI state after recreation or system-initiated process death, but durable application data still belongs in persistent storage.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Why Android invented Bundle
+
+
+
+Imagine you open an order details screen.
+
+The next screen only needs one value:
+
+```text
+orderId = 42
+```
+
+Now rotate the device. Android destroys and recreates the screen, but the new screen still needs to know which order was open.
+
+The same problem appears when Android launches another Activity, creates a Fragment, navigates between destinations, or restores UI state.
+
+Rather than inventing a different transport mechanism for every API, Android uses the same small container everywhere: **Bundle**.
+
+```text
+Small pieces of state
+          │
+          ▼
+        Bundle
+          │
+          ├── Intent extras
+          ├── Fragment arguments
+          ├── Navigation arguments
+          └── Saved instance state
+```
+
+The important mental model is simple: **Bundle is for carrying, not storing.** Android standardized on one transport container instead of inventing a different one for every API.
+
+| Carry | Store elsewhere |
+| --- | --- |
+| An item ID or route argument | A large object graph |
+| A search query or filter choice | Images or large byte arrays |
+| Scroll position or selected tab | A login session or source of truth |
+| Enough state to reconstruct the UI | Data that must survive long term |
+
+A senior engineer usually passes the smallest stable identifier possible. Instead of putting an entire `Order` into a Bundle, pass `orderId` and let the destination load the current order from its repository.
+
+That avoids stale copies, keeps component boundaries clear, and makes recreation easier.
+
+### Production consideration
+
+Bundles travel through Android's Binder transaction system, which is designed for small payloads.
+
+In practice, keep Bundles small, prefer IDs over complete objects, and reload durable data from its source whenever possible.
+
+Although Bundles support primitives, strings, nested Bundles, and `Parcelable` objects, treat that as a transport capability—not a reason to pass entire object graphs.
+
+## Code example
+
+```kotlin
+private const val ARG_ORDER_ID = "order_id"
+
+class OrderDetailsFragment : Fragment(R.layout.fragment_order_details) {
+
+    private val orderId: Long by lazy {
+        requireArguments().getLong(ARG_ORDER_ID)
+    }
+
+    companion object {
+        fun newInstance(orderId: Long) = OrderDetailsFragment().apply {
+            arguments = bundleOf(ARG_ORDER_ID to orderId)
+        }
+    }
+}
+```
+
+The Bundle transports only the stable identifier (`orderId`). The Fragment (or ViewModel) loads the actual Order from the repository.
+
+This keeps screens independent, avoids stale serialized objects, and makes recreation straightforward. The same principle applies to Intent extras, navigation arguments, and saved state.
+
+<Remember>
+
+**A Bundle carries state. It doesn't own or persist it.**
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [How do you pass data between Activities and Fragments?](/android/handbook/android-fundamentals/how-do-you-pass-data-between-activities-and-fragments)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Frames Bundle as Android's standard transport container rather than general-purpose storage.
+- Recognizes that Intent extras, Fragment arguments, Navigation arguments and saved state all reuse the same Bundle concept.
+- Explains that Intent extras, Fragment arguments, navigation arguments, and saved state use the same underlying container idea.
+- Passes stable identifiers and lightweight values instead of copying complete domain objects between screens.
+- Keeps durable application data in repositories, databases, or another source of truth.
+- Understands that Bundle-backed state should remain small to avoid serialization overhead and transaction-size failures.
+- Mentions `Parcelable` only as a supported transport format, not as permission to pass arbitrary object graphs.
+- Distinguishes transient UI restoration from long-term persistence and business-state ownership.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- Bundle is Android's standard container for carrying small pieces of state.
+- Intent extras, Fragment arguments, Navigation, and saved instance state commonly use Bundles.
+- Carry only what is needed; prefer IDs over complete object graphs.
+- Keep Bundles small; large payloads can lead to `TransactionTooLargeException`.
+- Think of Bundle as a suitcase, not a database.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Bundle API reference — Android Developers](https://developer.android.com/reference/android/os/Bundle)
+- [Parcelables and Bundles — Android Developers](https://developer.android.com/guide/components/activities/parcelables-and-bundles)
+- [Save UI states — Android Developers](https://developer.android.com/topic/libraries/architecture/saving-states)
+- [Pass data between destinations — Android Developers](https://developer.android.com/guide/navigation/use-graph/pass-data)
+
+</ReferenceList>

@@ -1,0 +1,23 @@
+{
+  "title": "Android Interview Handbook",
+  "pages": [
+    "index",
+    "android-fundamentals",
+    "android-runtime",
+    "kotlin",
+    "coroutines-flow",
+    "jetpack-compose",
+    "architecture",
+    "architecture-components",
+    "dependency-injection",
+    "networking",
+    "data-persistence",
+    "security",
+    "background-work",
+    "performance-reliability",
+    "testing",
+    "system-design",
+    "behavioral",
+    "coding-project-discussion"
+  ]
+}

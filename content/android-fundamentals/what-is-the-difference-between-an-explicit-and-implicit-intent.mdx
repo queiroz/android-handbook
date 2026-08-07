@@ -1,0 +1,160 @@
+---
+id: "AF-006"
+title: "What is the difference between an explicit and implicit Intent?"
+description: "Explain how Android chooses the destination of an Intent and when to use each form."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 6
+answerTime: "~30 sec"
+status: "published"
+tags:
+  - intent
+  - intent-resolution
+  - inter-app-communication
+  - security
+prerequisites:
+  - AF-001
+related:
+  - AF-014
+---
+
+<ShortAnswer>
+
+An **explicit Intent** is used when your app already knows exactly which component should handle the request, so your app chooses the destination. An **implicit Intent** is used when you only know the action you want performed—such as opening a web page, sharing text, or taking a photo—and Android finds a capable app through intent resolution.
+
+In practice, use explicit Intents for known destinations such as navigating to `SettingsActivity`. Use implicit Intents to delegate a capability to another app, such as sharing an article or opening a map.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand that the difference is not simply “internal versus external.” It is about **how the target component is selected**.
+
+A strong answer explains Android's resolution process, knows when a chooser improves user control, and recognises that intent filters and exported components create an inter-app entry point with security implications.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid saying that explicit Intents are only for Activities, or that every implicit Intent automatically displays a chooser.
+
+Both forms can address Activities, Services, and BroadcastReceivers. An implicit Intent is resolved against matching intent filters; Android may launch a preferred handler directly, show a system selection UI, or fail because nothing can handle the request.
+
+Also avoid trusting incoming implicit Intent data merely because Android matched an intent filter. Treat external input as untrusted and validate it before using it.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+A useful shortcut is to ask: **do I own and know the destination?** If yes, use an explicit Intent. If not, describe the capability and let Android resolve it.
+
+| Question | Explicit Intent | Implicit Intent |
+| --- | --- | --- |
+| Who chooses the destination? | Your app | Android |
+| Common use | Navigate to a known component | Delegate a capability |
+| Real-world example | Open `OrderDetailsActivity` | Share an article or open a map |
+| Intent filter required for targeting? | No | The receiving component needs a compatible filter |
+| Possible result | The named component starts or the request fails | Zero, one, or multiple apps may match |
+
+Common examples:
+
+| Scenario | Use | Why |
+| --- | --- | --- |
+| Open `SettingsActivity` in your app | Explicit | The destination is known |
+| Navigate to `OrderDetailsActivity` | Explicit | Your app owns the screen |
+| Open a website or map location | Implicit | Any capable app may handle it |
+| Share an article | Implicit | The user may choose a messaging, email, or social app |
+| Capture a photo with another camera app | Implicit | You are requesting a capability, not a specific component |
+
+An explicit Intent supplies a concrete component, while an implicit Intent supplies matching information such as an action and data.
+
+For an Activity, Android compares the Intent's action, data, MIME type, and categories against registered intent filters. If more than one app is eligible, the system may use the user's existing default. Use `Intent.createChooser()` when choosing the receiving app is part of the user action—for example, sharing content.
+
+Do not assume “implicit” means “outside your app.” A component in your own app can match an implicit Intent, although explicit targeting is normally clearer and safer for internal navigation. Conversely, an explicit Intent can target another app when its component is known and accessible.
+
+## Code example
+
+```kotlin
+fun Activity.openSettings() {
+    // Explicit: this app knows and owns the destination.
+    startActivity(Intent(this, SettingsActivity::class.java))
+}
+
+fun Activity.shareArticle(articleUrl: Uri) {
+    // Implicit: describe the capability and let Android find handlers.
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, articleUrl.toString())
+    }
+
+    val chooser = Intent.createChooser(
+        sendIntent,
+        getString(R.string.share_article)
+    )
+
+    try {
+        startActivity(chooser)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(this, R.string.no_share_app, Toast.LENGTH_SHORT).show()
+    }
+}
+```
+
+The first function uses an explicit Intent because the destination is a known screen owned by the app. The second describes the capability—sharing plain text—without naming an application, and a chooser lets the user select the receiving app.
+
+An implicit Activity Intent may resolve to zero, one, or multiple handlers. Handle failure rather than assuming another app is installed, and treat data received from external Intents as untrusted input.
+
+<Remember>
+
+**Interview tip:** Ask **who chooses the destination**. With an explicit Intent, the caller chooses. With an implicit Intent, Android performs resolution from the requested capability.
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [What is a PendingIntent and why is it needed?](/android/handbook/android-fundamentals/what-is-a-pendingintent-and-why-is-it-needed)
+- [What is a Service?](/android/handbook/android-fundamentals/what-is-a-service)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Frames the distinction around target selection and Intent resolution, not constructor syntax.
+- Explains that explicit and implicit Intents can address Activities, Services, and BroadcastReceivers.
+- Knows an implicit Activity Intent can resolve to zero, one, or multiple matching handlers and explains how each case affects the user experience.
+- Uses a chooser when the user should select the receiving app rather than relying on a default.
+- Handles resolution failure instead of assuming another app is installed.
+- Treats externally supplied actions, extras, and URI data as untrusted input.
+- Recognises that intent filters and `android:exported` define externally reachable surfaces and should be kept as narrow as possible.
+- Uses explicit Intents for known internal components to avoid accidental interception and make ownership clear.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- An explicit Intent names the destination; an implicit Intent describes the capability.
+- Android resolves implicit Intents using action, data, type, categories, and intent filters.
+- Explicit Intents are normally the clearest choice for known in-app components.
+- Implicit Intents are useful for delegating work to another capable application.
+- A chooser gives the user control when selecting the receiving app matters.
+- Validate incoming Intent data and handle cases where no suitable component is available.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Intents and intent filters — Android Developers](https://developer.android.com/guide/components/intents-filters)
+- [Common intents — Android Developers](https://developer.android.com/guide/components/intents-common)
+- [Package visibility filtering — Android Developers](https://developer.android.com/training/package-visibility)
+- [Security risks of unsafe Intent use — Android Developers](https://developer.android.com/privacy-and-security/risks/implicit-intent-hijacking)
+
+</ReferenceList>

@@ -1,0 +1,13 @@
+{
+  "title": "Behavioral and Leadership",
+  "pages": [
+    "index",
+    "tell-me-about-a-difficult-android-bug-you-diagnosed",
+    "tell-me-about-an-architecture-decision-and-its-trade-offs",
+    "tell-me-about-a-production-incident-you-owned",
+    "how-do-you-handle-disagreement-during-code-review",
+    "how-have-you-mentored-another-engineer",
+    "how-do-you-manage-technical-debt",
+    "tell-me-about-a-time-requirements-changed-late"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "title": "Android Fundamentals",
+  "pages": [
+    "index",
+    "what-is-android",
+    "what-is-context-in-android",
+    "what-is-the-difference-between-an-activity-and-a-fragment",
+    "can-you-walk-through-the-activity-lifecycle",
+    "what-triggers-onpause-onstop-and-ondestroy",
+    "can-you-describe-the-fragment-lifecycle-and-fragment-view-lifecycle",
+    "what-is-the-difference-between-an-explicit-and-implicit-intent",
+    "what-is-a-pendingintent-and-why-is-it-needed",
+    "what-is-a-bundle-and-when-would-you-use-one",
+    "how-do-you-pass-data-between-activities-and-fragments",
+    "what-is-a-service",
+    "what-is-a-broadcastreceiver",
+    "what-is-a-contentprovider",
+    "what-causes-an-anr-and-how-would-you-diagnose-it",
+    "what-are-tasks-and-the-back-stack",
+    "what-are-deep-links-and-android-app-links",
+    "what-is-the-difference-between-apk-and-aab",
+    "what-is-the-difference-between-a-configuration-change-and-process-death",
+    "what-is-the-difference-between-onsaveinstancestate-viewmodel-and-savedstatehandle",
+    "what-happens-when-android-starts-an-application"
+  ]
+}

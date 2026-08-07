@@ -1,0 +1,186 @@
+---
+id: "AF-010"
+title: "What is a Service?"
+description: "Understand what a Service is, why Android introduced it, and when it is the right choice."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 10
+answerTime: "~45 sec"
+status: "published"
+tags:
+  - service
+  - background-work
+  - lifecycle
+prerequisites:
+  - AF-004
+  - AF-009
+related: []
+---
+
+<ShortAnswer>
+
+A Service is an Android component that performs work independently of a visible screen. Unlike an Activity, it has no user interface and can continue existing after the screen that started it is no longer visible.
+
+Android introduced Services for work whose lifetime should not be tied to the current screen, such as music playback, active navigation, or exposing functionality to other applications through a bound Service.
+
+A Service defines **lifetime**, not **threading**. It does not automatically create a background thread; it simply separates the lifetime of the work from the lifetime of the screen.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand what problem Services were designed to solve, not whether you can recite every lifecycle callback.
+
+They want to understand whether you know **what problem a Service solves**, why Android introduced it, and when it is still the appropriate component in modern Android.
+
+A strong answer explains that a Service gives work a lifetime independent of the current screen, but that it does **not** decide how the work executes. Senior engineers can then explain why a ViewModel, WorkManager, or a Foreground Service may each be more appropriate depending on the requirement.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid thinking of a Service as Android's background thread.
+
+A Service changes **who owns the work**, not **where the work executes**. Its callbacks run on the application's main thread by default, so blocking or CPU-intensive work must still be moved to an appropriate coroutine dispatcher, executor, or other asynchronous mechanism.
+
+Also avoid starting a Service merely because an operation takes a long time. If the work only matters while a screen or ViewModel is alive, that existing lifecycle owner is usually the better owner.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Why Android introduced Services
+
+Imagine a music player. The user presses **Home** while a song is playing.
+
+Should the music stop simply because the Activity disappeared?
+
+No. The playback should continue because the **work** outlives the **screen**. Android introduced the Service component to model exactly that kind of lifetime.
+
+
+### Start with ownership and lifetime
+
+Imagine a music player.
+
+The user starts playback and then presses Home. Should the music stop simply because the Activity disappeared?
+
+No. The playback should outlive the screen.
+
+```text
+Playback screen
+      │
+      │ starts playback
+      ▼
+Playback Service
+      │
+      │ music continues
+      ▼
+Activity finishes
+```
+
+The Service owns the playback session. The Activity simply controls or observes it while the UI is visible.
+
+### Choose the right tool
+
+| Requirement | Usually choose | Why |
+| --- | --- | --- |
+| Work only matters while a screen is alive | Coroutine in a ViewModel or lifecycle owner | The work shares the same owner and cancellation boundary |
+| Work must eventually complete | WorkManager | Persistence, constraints, retries, and scheduling |
+| Immediate, ongoing, user-visible work | Foreground Service | Independent, visible component lifetime |
+| Clients need an interactive API | Bound Service | Components can connect to a shared capability |
+
+The work may happen without a visible screen in every row. That alone does not make a Service the right choice. Choose the mechanism by the ownership, lifetime, visibility, and reliability the work requires.
+
+### Production considerations
+
+Always start by asking whether the work genuinely needs a lifetime independent of the current screen. If it belongs to a ViewModel, keep it there. If it must eventually complete even after process death, WorkManager is usually a better choice. Reach for a Service only when the work itself must outlive the UI or expose a long-lived capability.
+
+
+A Service adds another Android component and another lifecycle to reason about, so it should own a genuine responsibility rather than simply wrap slow code.
+
+If the work belongs to the current UI, keep it in a ViewModel. If it must eventually complete after process death, WorkManager is usually the better choice. Reserve Services for work that genuinely owns its own lifetime.
+
+Use the narrowest execution model that satisfies the requirement. A coroutine is simpler when work belongs to an existing lifecycle owner. WorkManager is usually the better fit for persistent, retryable, or constrained work. A foreground Service is justified when work is immediate, ongoing, and clearly noticeable to the user, such as media playback or active navigation.
+
+Using Services indiscriminately increases lifecycle complexity, makes testing harder, consumes system resources, and may conflict with modern Android background-execution restrictions. Even a foreground Service is not immortal; interruption and process death still require deliberate recovery and state handling.
+
+## Code example
+
+```kotlin
+class PlaybackService : LifecycleService() {
+
+    private val player = PlayerEngine()
+
+    override fun onCreate() {
+        super.onCreate()
+        startForeground(NOTIFICATION_ID, createNotification())
+    }
+
+    fun play(track: Track) {
+        player.play(track)
+    }
+}
+```
+
+The important design decision is not the call to `startForeground()`. It is that the playback engine is owned by the Service rather than by an Activity, so playback can continue while screens come and go.
+
+In production, the Service should remain a thin Android lifecycle boundary. Playback, storage, networking, and domain rules should live in ordinary collaborators that are easier to test and reuse.
+
+<Remember>
+
+**Choose a Service when work should outlive the screen—not because it runs in the background.**
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- What is the difference between a started and bound Service?
+- When should you use WorkManager instead of a Service?
+- What is a foreground Service?
+- Why doesn't a Service create a background thread?
+- Can a Service survive process death?
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Answers the basic question clearly: a Service is a UI-less Android component with a lifetime that can be independent of a screen.
+- Separates component ownership and lifetime from the thread on which work executes.
+- Knows that Service callbacks run on the main thread by default.
+- Chooses the execution model based on ownership, lifetime, visibility, and reliability rather than calling all non-UI work “background work.”
+- Uses coroutines for work owned by an existing lifecycle, WorkManager for persistent deferrable work, and foreground Services for immediate user-visible work.
+- Distinguishes started Services, bound Services, and Services that are both started and bound.
+- Recognizes that foreground execution improves visibility and process importance but does not guarantee immortality.
+- Keeps business logic in testable collaborators while the Service acts as the Android lifecycle boundary.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- A Service gives work a lifetime independent of the screen.
+- A Service does not automatically create a background thread.
+- Lifetime, threading, visibility, and reliability are separate design decisions.
+- Choose a Service only when the work genuinely needs a lifetime independent of the screen.
+- Foreground Services are for immediate, ongoing, user-visible work—not every long-running task.
+- Keep the Service thin and place business logic in ordinary testable classes.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Services overview — Android Developers](https://developer.android.com/develop/background-work/services)
+- [Background work overview — Android Developers](https://developer.android.com/develop/background-work/background-tasks)
+- [Foreground services overview — Android Developers](https://developer.android.com/develop/background-work/services/fgs)
+- [Bound services overview — Android Developers](https://developer.android.com/develop/background-work/services/bound-services)
+- [WorkManager overview — Android Developers](https://developer.android.com/topic/libraries/architecture/workmanager)
+
+</ReferenceList>

@@ -1,0 +1,172 @@
+---
+id: "AF-004"
+title: "Can you walk through the Activity lifecycle?"
+description: "Explain Activity lifecycle states, callback responsibilities, and modern lifecycle-aware patterns."
+difficulty: "intermediate"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 7
+answerTime: "~45 sec"
+status: "published"
+tags:
+  - activity
+  - lifecycle
+  - viewmodel
+  - coroutines
+prerequisites:
+  - AF-003
+related:
+  - AF-005
+  - AF-018
+  - AF-019
+---
+
+<ShortAnswer>
+
+The Activity lifecycle describes how Android moves an Activity between states such as **created, visible, interactive, paused, and stopped**. Each lifecycle callback simply tells you that the Activity has entered one of those states so you can start or stop the appropriate work.
+
+`onCreate()` performs one-time initialization for that Activity instance, such as inflating the UI and restoring state. `onStart()` means the Activity becomes visible, and `onResume()` means it enters the foreground and is ready for user interaction. When it loses focus, `onPause()` runs; when it is no longer visible, `onStop()` runs. `onDestroy()` is called when that Activity instance is being destroyed, either because it is finishing or being recreated.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is checking whether you understand what each lifecycle **state means** and can place work according to visibility, user interaction, and resource ownership.
+
+A strong answer goes beyond reciting callback order. It explains where setup and cleanup belong, recognises that configuration changes create a new Activity instance, and avoids treating lifecycle callbacks as storage for business logic.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid answering with only:
+
+> "`onCreate`, `onStart`, `onResume`, `onPause`, `onStop`, `onDestroy`."
+
+That sequence is useful, but it does not show engineering judgement. Interviewers want to hear what state the Activity is entering, what work belongs there, and how you prevent work from continuing when the UI is no longer visible.
+
+Also avoid treating `onDestroy()` as guaranteed. Android can terminate the application process after the Activity has stopped without calling it.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Think of each callback as Android notifying you that the Activity has entered a different state. The callback names matter, but understanding the state transition and the responsibility that comes with it is what interviewers are really assessing.
+
+| Callback | Activity state | Typical responsibility |
+| --- | --- | --- |
+| `onCreate()` | Instance is being created | Inflate or compose the UI, restore lightweight UI state, obtain the `ViewModel`, configure navigation |
+| `onStart()` | Visible | Start work that should run while the UI is visible; begin lifecycle-aware observation |
+| `onResume()` | Foreground and interactive | Acquire exclusive foreground resources such as camera input, sensors, or active interaction |
+| `onPause()` | Losing foreground focus | Pause exclusive work and commit small, fast UI changes; do not perform slow blocking work |
+| `onStop()` | No longer visible | Stop visibility-bound work and release heavier resources that are not needed in the background |
+| `onDestroy()` | This Activity instance is being destroyed | Release resources owned for the full instance lifetime; distinguish finishing from recreation when relevant |
+
+The normal launch path is:
+
+`onCreate()` → `onStart()` → `onResume()`
+
+When another screen fully covers the Activity, it usually moves through:
+
+`onPause()` → `onStop()`
+
+If the user returns, the existing instance normally receives:
+
+`onRestart()` → `onStart()` → `onResume()`
+
+If the Activity finishes, it proceeds toward `onDestroy()`. The exact path depends on what happens: a partially covering window may trigger `onPause()` without `onStop()`, while multi-window mode means an Activity can remain visible without being the currently resumed Activity.
+
+A useful rule is to **acquire and release resources symmetrically**. Work started in `onStart()` should normally stop in `onStop()`; work started in `onResume()` should normally stop in `onPause()`.
+
+A configuration change, such as a rotation or window-size change, usually destroys the current Activity instance and creates a new one. A `ViewModel` can retain screen state across that recreation, but it does not survive system-initiated process death. Restorable UI state belongs in saved state APIs, while durable application data belongs in persistent storage.
+
+## Code example
+
+```kotlin
+class OrdersActivity : AppCompatActivity(R.layout.activity_orders) {
+    private val viewModel: OrdersViewModel by viewModels()
+    private lateinit var locationUpdates: LocationUpdates
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect(::render)
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        locationUpdates.start()
+    }
+
+    override fun onStop() {
+        locationUpdates.stop()
+        super.onStop()
+    }
+
+    private fun render(state: OrdersUiState) {
+        // Render the latest state into the existing view hierarchy.
+    }
+}
+```
+
+The `ViewModel` owns screen state instead of the Activity instance. `repeatOnLifecycle` collects only while the lifecycle is at least `STARTED`, cancels the collection when the Activity stops, and restarts it when the Activity becomes visible again.
+
+The location resource is acquired in `onStart()` and released in `onStop()` because this example needs updates only while the screen is visible. A resource needed exclusively while the user can interact would instead be paired across `onResume()` and `onPause()`.
+
+<Remember>
+
+**Interview tip:** Don't memorise callbacks as isolated methods. Explain the **state transition**, then place work in the narrowest lifecycle state that actually needs it.
+
+</Remember>
+
+## Follow-up questions
+
+<FollowUp>
+
+- [Can you describe the Fragment lifecycle and Fragment view lifecycle?](/android/handbook/android-fundamentals/can-you-describe-the-fragment-lifecycle-and-fragment-view-lifecycle)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains lifecycle states and ownership instead of merely reciting callback order.
+- Describes the lifecycle as state transitions rather than a sequence of callbacks.
+- Places work according to visibility and interaction, using symmetrical acquisition and cleanup.
+- Keeps business logic and screen state out of the Activity where possible, typically using a `ViewModel`.
+- Uses lifecycle-aware collection such as `repeatOnLifecycle` rather than collecting indefinitely.
+- Distinguishes Activity recreation during configuration changes from system-initiated process death.
+- Knows that `onDestroy()` is not a reliable persistence hook and that `ViewModel` does not survive process death.
+- Accounts for cases such as partially obscured Activities and multi-window mode instead of assuming paused always means invisible.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- `onCreate()` creates the Activity instance and its UI; `onStart()` makes it visible; `onResume()` makes it interactive.
+- `onPause()` means foreground interaction is being lost, while `onStop()` means the Activity is no longer visible.
+- Acquire and release resources in matching lifecycle boundaries.
+- Use `ViewModel` for state across configuration changes and saved state or persistence for process death.
+- Prefer lifecycle-aware APIs over manually keeping long-running UI observation alive.
+- Lifecycle callbacks notify state transitions; they are not business logic entry points.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [The Activity lifecycle — Android Developers](https://developer.android.com/guide/components/activities/activity-lifecycle)
+- [Activity state changes — Android Developers](https://developer.android.com/guide/components/activities/state-changes)
+- [Use Kotlin coroutines with lifecycle-aware components — Android Developers](https://developer.android.com/topic/libraries/architecture/coroutines)
+- [Handle configuration changes — Android Developers](https://developer.android.com/guide/topics/resources/runtime-changes)
+- [Save UI states — Android Developers](https://developer.android.com/topic/libraries/architecture/saving-states)
+
+</ReferenceList>

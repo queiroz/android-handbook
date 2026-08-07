@@ -1,0 +1,15 @@
+{
+  "title": "Performance and Reliability",
+  "pages": [
+    "index",
+    "what-causes-memory-leaks-on-android",
+    "how-would-you-investigate-an-anr",
+    "what-causes-ui-jank",
+    "how-do-you-measure-app-startup-performance",
+    "what-is-strictmode-and-when-would-you-use-it",
+    "how-do-you-profile-memory-usage",
+    "how-do-you-diagnose-compose-performance-problems",
+    "what-is-macrobenchmark",
+    "what-is-perfetto"
+  ]
+}
