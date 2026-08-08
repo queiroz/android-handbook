@@ -1,46 +1,170 @@
 ---
 id: "AF-011"
 title: "What is a BroadcastReceiver?"
-description: "What is a BroadcastReceiver."
+description: "Understand what a BroadcastReceiver is, why Android introduced it, and when it should be used."
 difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 10
+answerTime: "~45 sec"
+status: "published"
 tags:
-  - broadcast-receiver
-prerequisites: []
+  - broadcastreceiver
+  - events
+  - system
+prerequisites:
+  - AF-010
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+A BroadcastReceiver allows your application to react to broadcast events sent by Android or another application. It acts as an event listener for system-wide or application broadcasts.
 
-## Short interview answer
+Unlike a Service, a BroadcastReceiver is not designed for long-running work. It receives an event, performs lightweight processing, and typically delegates any substantial work to another component such as WorkManager.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+Modern Android also limits many broadcasts to improve battery life and privacy, so BroadcastReceivers should be used only when broadcasts are the appropriate communication mechanism.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
+
+The interviewer is checking whether you understand Android's event-driven architecture, component responsibilities, and modern background execution limits—not simply whether you know how to register a receiver.
+
+A strong answer explains what problem a BroadcastReceiver solves, why its lifetime is deliberately short, and when the receiver should hand work to another component instead of trying to perform that work itself.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid thinking of a BroadcastReceiver as a background worker.
+
+A BroadcastReceiver reacts to an event; it does not own long-running work. Keep `onReceive()` short and non-blocking, and delegate substantial work to WorkManager or another appropriate component.
+
+Also avoid assuming every broadcast should be handled through a receiver. Modern Android often provides more specific callbacks or APIs, and many manifest-registered implicit broadcasts are restricted.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Why Android introduced BroadcastReceivers
+
+Android needs a way to notify interested applications when important events occur without every application continuously checking for changes.
+
+Instead of every app polling the system, Android broadcasts those events. Applications that care about them register a BroadcastReceiver and react only when the broadcast arrives.
+
+Think of the receiver as a **doorbell, not a worker**. It tells the app that something happened; it should not become the place where long-running work lives.
+
+```text
+Android event
+      │
+      ▼
+Broadcast sent
+      │
+      ▼
+BroadcastReceiver
+      │
+      ▼
+Small amount of work
+      │
+      ▼
+(optional)
+WorkManager or another owner
+```
+
+Modern Android restricts many manifest-registered implicit broadcasts to reduce unnecessary background work and improve battery life. That makes the responsibility of the receiver even clearer: react to the event, then hand off work when necessary.
+
+### Production considerations
+
+Keep `onReceive()` short and non-blocking. A receiver normally runs on the application's main thread, so blocking work can delay the app and may cause the system to terminate the receiver.
+
+Register receivers for the smallest lifecycle that matches the requirement. If an event only matters while a screen is visible, a context-registered receiver tied to that lifecycle is usually preferable to making the receiver application-wide.
+
+Treat incoming broadcasts as external input. Validate the action and any extras you depend on, and expose a receiver only when another application genuinely needs to reach it.
+
+Use a BroadcastReceiver only when broadcasts are the correct communication mechanism. Modern Android APIs often provide dedicated callbacks that are more explicit and easier to scope.
+
+### Choose the right tool
+
+| Requirement | Usually choose | Why |
+| --- | --- | --- |
+| React to a broadcast event | BroadcastReceiver | Event-driven notification |
+| Persistent, deferrable work | WorkManager | Reliable scheduling and retries |
+| Immediate, ongoing, user-visible work | Foreground Service | Independent visible lifetime |
+| Screen-owned state | ViewModel | Matches the UI lifecycle |
+
+The important distinction is responsibility. A BroadcastReceiver notices an event; another component should own work that needs a longer lifetime.
 
 ## Code example
 
-{/* Include a focused example only when code makes the answer clearer. */}
+```kotlin
+class BatteryReceiver : BroadcastReceiver() {
 
-## Common mistakes
+    override fun onReceive(context: Context, intent: Intent) {
+        // Keep the receiver lightweight.
+        WorkManager.getInstance(context)
+            .enqueue(
+                OneTimeWorkRequestBuilder<SyncWorker>().build()
+            )
+    }
+}
+```
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+The receiver reacts to the event and returns quickly. The longer-running synchronization is owned by WorkManager rather than by `onReceive()`.
+
+<Remember>
+
+A BroadcastReceiver reacts to events and delegates substantial work to another component.
+
+</Remember>
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- What is the difference between manifest and context-registered receivers?
+- Why were many implicit broadcasts restricted?
+- What happens if `onReceive()` takes too long?
+- When should you use WorkManager instead?
+- Can another application send a broadcast to your receiver?
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Answers the basic question clearly: a BroadcastReceiver lets an application react to broadcast events.
+- Explains the responsibility of the component rather than only describing registration APIs.
+- Knows that `onReceive()` is short-lived and normally runs on the main thread.
+- Delegates long-running work to a component whose lifetime and guarantees match that work.
+- Explains why Android restricts many implicit broadcasts and how that affects modern applications.
+- Registers receivers with the narrowest lifecycle that satisfies the requirement.
+- Treats incoming broadcasts as external input and reasons about exported receivers and trust boundaries.
+- Uses a BroadcastReceiver only when broadcasts are actually the appropriate communication mechanism.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- A BroadcastReceiver lets an application react to broadcast events.
+- A receiver is short-lived and is not a background worker.
+- Keep `onReceive()` lightweight and non-blocking.
+- Delegate substantial work to the component that should actually own it.
+- Modern Android restricts many broadcasts to reduce unnecessary background work.
+- Use broadcasts only when they are the correct communication mechanism.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Broadcasts overview — Android Developers](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
+- [BroadcastReceiver API reference — Android Developers](https://developer.android.com/reference/android/content/BroadcastReceiver)
+- [Background work overview — Android Developers](https://developer.android.com/develop/background-work/background-tasks)
+- [WorkManager overview — Android Developers](https://developer.android.com/topic/libraries/architecture/workmanager)
+
+</ReferenceList>
