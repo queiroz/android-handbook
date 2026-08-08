@@ -1,47 +1,219 @@
 ---
 id: "KOT-003"
 title: "What is the difference between Any, Unit, and Nothing?"
-description: "What is the difference between Any, Unit, and Nothing."
+description: "Understand what Kotlin means when code produces a value, no useful result, or no result at all."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
   - kotlin
-  - types
+  - any
+  - unit
+  - nothing
+  - type-system
 prerequisites: []
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+`Any`, `Unit`, and `Nothing` describe very different outcomes in Kotlin.
 
-## Short interview answer
+`Any` is the common supertype of Kotlin's non-null types, so when you see `Any`, there is a value, but the code is deliberately not saying anything more specific about what that value is.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+`Unit` means the code finishes normally, but there is no meaningful result for the caller. You see it in functions that perform an action rather than calculate a value.
 
-## Explanation
+`Nothing` means the opposite: that code path can never produce a value because it never completes normally, for example because it throws an exception or calls `TODO()`.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+So I think of them as **some value, no useful result, and no possible result**.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The useful part of this question is whether you understand that Kotlin models **what an expression can produce** as part of its type system.
+
+A strong answer does more than compare `Any` with Java's `Object` or `Unit` with `void`. It explains why `Nothing` can appear where another type is expected, why `Unit` works naturally in function types, and why `Any` is usually a sign that the API has intentionally given up more specific type information.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid treating `Unit` and `Nothing` as two ways of saying "nothing is returned."
+
+They describe completely different control flow.
+
+```kotlin
+fun save(user: User): Unit {
+    repository.save(user)
+}
+
+fun fail(message: String): Nothing {
+    throw IllegalStateException(message)
+}
+```
+
+`save()` reaches the end of the function normally. There is simply no useful result for its caller.
+
+`fail()` never reaches the end at all. It cannot produce a value because normal execution does not continue from that call.
+
+`Nothing` is also not the same as `null`. `null` is still a value that can exist for a nullable type; `Nothing` has no possible values.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### `Any` means the specific type has been widened away
+
+Every non-null Kotlin type has `Any` as a supertype.
+
+That makes code like this valid:
+
+```kotlin
+val value: Any = User("Ada")
+```
+
+The `User` still exists, but through the name `value` you can only rely on what `Any` guarantees. The more specific `User` API is no longer visible without narrowing or casting the type again.
+
+The nullable distinction matters too. `Any` itself does not include `null`; `Any?` is the type that can represent any Kotlin value, including `null`.
+
+That is why `Any` is useful when the type genuinely can vary, but usually a poor return type when the API actually knows something more specific.
+
+### `Unit` means the operation completed
+
+A function that performs work but does not produce a useful result has the return type `Unit`:
+
+```kotlin
+fun trackScreen(name: String): Unit {
+    analytics.track(name)
+}
+```
+
+Kotlin normally lets you omit `: Unit`, but the type is still there.
+
+The important difference from Java-style `void` is that `Unit` participates in Kotlin's type system. It has a single value, also called `Unit`, which makes function types such as callbacks straightforward:
+
+```kotlin
+fun onRetry(action: () -> Unit) {
+    action()
+}
+```
+
+The callback returns normally; its result just is not the point of the API.
+
+### `Nothing` means there is no successful continuation
+
+`Nothing` has no values at all. Kotlin uses it for expressions that never complete normally.
+
+That is why this works:
+
+```kotlin
+val user = repository.findUser(id)
+    ?: throw UserNotFoundException(id)
+```
+
+The left side of the Elvis operator produces a `User` when one exists. The `throw` expression has type `Nothing`, so it never needs to provide the missing `User`; execution stops on that branch instead.
+
+The same idea explains why `TODO()` can sit inside a function that promises to return almost any type:
+
+```kotlin
+fun loadProfile(): Profile {
+    TODO("Load profile")
+}
+```
+
+`TODO()` returns `Nothing`. It does not pretend to create a `Profile`; it tells the type system that this path never produces a value at all.
+
+<Remember>
+
+**`Any` means a value exists. `Unit` means the work finished without a useful result. `Nothing` means it never finished normally.**
+
+</Remember>
+
+### Production thinking
+
+The production value of these types is mostly about making APIs tell the truth.
+
+If a function really returns a `User`, exposing it as `Any` throws away useful information and pushes type checks or casts onto the caller. `Any` is appropriate when the API genuinely accepts or produces unrelated types, but it should not be used as an escape hatch from modelling the data properly.
+
+`Unit` is useful for command-style APIs and callbacks where the important thing is that some work happens:
+
+```kotlin
+fun updateProfile(
+    profile: Profile,
+    onComplete: () -> Unit,
+) {
+    repository.update(profile)
+    onComplete()
+}
+```
+
+The callback communicates an event, not a computed value.
+
+`Nothing` is useful when failure or termination is part of the contract. Small helpers such as `error()`, `TODO()`, or your own fail-fast functions can return `Nothing`, which lets the compiler understand that successful execution cannot continue from that point.
+
+The judgement is not to force these types into code. It is to recognise what they communicate: **how much type information is available, whether an operation completes normally, and whether a value can exist on that path at all.**
 
 ## Code example
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The three ideas become clearer when you put them side by side:
 
-## Common mistakes
+```kotlin
+fun describe(value: Any): String {
+    return value.toString()
+}
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+fun logIn(user: User): Unit {
+    sessionStore.save(user)
+}
 
-## Follow-up questions
+fun missingUser(id: String): Nothing {
+    throw UserNotFoundException(id)
+}
+```
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+`describe()` receives some non-null value without knowing its more specific type. `logIn()` completes normally but exists for its side effect. `missingUser()` has no successful return path at all.
 
-## Interviewer notes
+Those are three different contracts, not three different spellings for "no type."
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains the types in terms of what a value or code path can produce instead of only reciting type-hierarchy definitions.
+- Knows that `Any` is the common supertype of non-null types and that `Any?` is required when `null` must also be representable.
+- Describes `Unit` as a real Kotlin type for operations that complete normally without a meaningful result, rather than simply calling it `void`.
+- Recognises `Nothing` as an uninhabited type for code paths that never complete normally, which is why `throw`, `error()`, and `TODO()` compose with other expressions.
+- Avoids returning `Any` from APIs when a more precise type can preserve useful guarantees for callers.
+- Uses `Nothing` to model impossible or terminating paths only when that is genuinely the contract, rather than as a trick to satisfy the compiler.
+- Stops once the type-system distinction is clear instead of turning the answer into a tour of Kotlin's entire type hierarchy.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `Any` is the common supertype of Kotlin's non-null types; `Any?` can also represent `null`.
+- `Unit` means a function or expression completes normally without a meaningful result for the caller.
+- `Nothing` has no values and represents a code path that never completes normally.
+- `Unit` and `Nothing` are not interchangeable: one completes, the other cannot.
+- `throw`, `error()`, and `TODO()` work naturally in expressions because their result type is `Nothing`.
+- Prefer precise API types over `Any` when the code already knows what kind of value it is dealing with.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Basic types: `Any` — Kotlin documentation](https://kotlinlang.org/docs/basic-types.html)
+- [Functions: Unit-returning functions — Kotlin documentation](https://kotlinlang.org/docs/functions.html#unit-returning-functions)
+- [Exceptions: `throw` is an expression — Kotlin documentation](https://kotlinlang.org/docs/exceptions.html#throw-exceptions-with-the-throw-expression)
+- [`Nothing` — Kotlin standard library API](https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-nothing/)
+- [`TODO()` — Kotlin standard library API](https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-t-o-d-o.html)
+
+</ReferenceList>
