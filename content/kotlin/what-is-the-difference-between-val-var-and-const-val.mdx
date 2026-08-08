@@ -1,47 +1,160 @@
 ---
 id: "KOT-001"
 title: "What is the difference between val, var, and const val?"
-description: "What is the difference between val, var, and const val."
+description: "Understand reassignment, mutation, and compile-time constants in Kotlin."
 difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
+estimatedTime: 8
+answerTime: "~45 sec"
 status: "draft"
 tags:
   - kotlin
-  - properties
+  - val
+  - var
+  - const
 prerequisites: []
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+`val` is for a reference that shouldn't be reassigned after it has been initialized. That does **not** mean the object itself is immutable. A `val` can still hold something mutable, such as a `MutableList`; you cannot replace the list with another one, but you can still change its contents.
 
-## Short interview answer
+`var` is for when reassignment is genuinely part of the behaviour. If that variable or property needs to point to a different value as the program runs, `var` allows that change.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+`const val` solves a different problem. It's a compile-time constant, so the value has to be known before your application starts running. That's why you'll see it used for things like annotation arguments and other constant values.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
 
-## Code example
+This looks like a syntax question, but the useful distinction is really about **what is allowed to change, and when the value becomes known**.
 
-{/* Include a focused example only when code makes the answer clearer. */}
+A good answer separates reassignment from mutation. It also recognises that `const val` is not simply another way to write `val`; it exists for values the compiler must be able to treat as constants before the application is running.
 
-## Common mistakes
+## ❌ Common mistake
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+<CommonMistake>
 
-## Follow-up questions
+Avoid saying **"`val` means immutable."**
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+`val` prevents reassignment of the variable or property. It says nothing about whether the object stored there can change internally.
 
-## Interviewer notes
+```kotlin
+val users = mutableListOf("Alice")
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+users.add("Bob")          // Fine: the list mutates.
+// users = mutableListOf() // Not fine: that would reassign users.
+```
+
+The reference still points to the same list; the contents of that list changed.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Reassignment and mutation are different things
+
+This is the distinction that makes `val` click.
+
+```kotlin
+val session = UserSession("abc")
+```
+
+You cannot later make `session` refer to a different `UserSession`.
+
+But if `UserSession` itself exposes mutable state, that state may still change. `val` controls the assignment to `session`; it does not reach inside the object and make the whole object immutable.
+
+With `var`, reassignment is part of the design:
+
+```kotlin
+var selectedTab = 0
+selectedTab = 1
+```
+
+Here the value represented by `selectedTab` genuinely changes over time, so reassignment is expected rather than accidental.
+
+### Why `const val` exists
+
+A normal `val` can be calculated while your program is running:
+
+```kotlin
+val apiUrl = buildApiUrl()
+```
+
+That is perfectly valid because Kotlin only needs `apiUrl` once that code executes.
+
+A `const val` is different. The compiler must be able to determine the value from the declaration itself:
+
+```kotlin
+const val EXTRA_USER_ID = "extra_user_id"
+```
+
+That is why `const val` is restricted to primitive types and `String`, must be initialized with a compile-time constant expression, and can only be declared at the top level or inside an `object` or companion object.
+
+You commonly see these constants used for things such as stable Intent or Bundle keys. Compile-time constants are also needed in places where Kotlin requires a value before runtime, such as certain annotation arguments.
+
+<Remember>
+
+**`val` vs `var` is about reassignment. `const val` is about when the value must be known.**
+
+</Remember>
+
+### Production considerations
+
+The useful part of `val` is not that it makes code "more Kotlin." It makes a promise to the next person reading the code: **this name will not be reassigned somewhere later.**
+
+That matters most when state starts moving through ViewModels, repositories, controllers, or long-lived objects. If something is declared as `var`, the reader has to consider that the value may be replaced elsewhere. If reassignment is not part of the design, there is little reason to expose that extra possibility.
+
+The same idea applies to APIs. A class can keep mutable state internally while exposing a read-only view of it:
+
+```kotlin
+class Cart {
+    private val _items = mutableListOf<Item>()
+    val items: List<Item> = _items
+
+    fun add(item: Item) {
+        _items += item
+    }
+}
+```
+
+Callers can observe `items`, but they do not own the mutation. The `Cart` keeps control of how its state changes.
+
+Use `const val` when you actually need a compile-time constant, not because it looks "more constant" or as a performance trick. A value that is discovered from configuration, a database, resources, dependency injection, or another runtime source is simply not a `const val` problem.
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains `val` and `var` in terms of reassignment instead of calling one "immutable" and the other "mutable."
+- Separates the mutability of an object from whether the variable holding it can be reassigned.
+- Recognises `const val` as a compile-time requirement rather than a stronger form of `val`.
+- Uses mutability deliberately and keeps ownership of state clear instead of exposing writable state unnecessarily.
+- Knows that read-only APIs can sit on top of internally mutable implementations when one owner should control changes.
+- Does not turn the answer into a list of Kotlin rules once the distinction has been made.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `val` cannot be reassigned after it has been initialized.
+- `var` can be reassigned when changing the value is part of the object's behaviour.
+- A `val` can still refer to a mutable object; read-only and immutable are not the same thing.
+- `const val` is for values the compiler can know at compile time.
+- Use the declaration to communicate who is allowed to change state and how that state is expected to change.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Properties — Kotlin documentation](https://kotlinlang.org/docs/properties.html)
+- [Basic syntax: variables — Kotlin documentation](https://kotlinlang.org/docs/basic-syntax.html#variables)
+- [Coding conventions: property names — Kotlin documentation](https://kotlinlang.org/docs/coding-conventions.html#property-names)
+
+</ReferenceList>
