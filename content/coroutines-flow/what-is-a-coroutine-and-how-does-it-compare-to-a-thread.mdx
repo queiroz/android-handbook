@@ -7,7 +7,7 @@ track: "core"
 contentType: "interview-question"
 estimatedTime: 8
 answerTime: "~45 sec"
-status: "draft"
+status: "published"
 tags:
   - coroutines
   - threads
@@ -39,7 +39,6 @@ They're trying to understand whether you have the right mental model for how wor
 Can you explain the difference between **blocking a thread** and **suspending a coroutine**? Do you understand that coroutines still need threads to run, rather than replacing them?
 
 A strong answer shows that you understand **why coroutines exist**. It's less about knowing the `launch` API and more about explaining how coroutines let work pause without keeping a thread blocked while it waits.
-
 
 ## ❌ Common mistake
 
@@ -119,7 +118,7 @@ This code reads from top to bottom, but `loadProfile()` can suspend while waitin
 - Explains the difference between blocking and suspending instead of calling coroutines "lightweight threads".
 - Knows that coroutines still execute on threads.
 - Understands that one thread can execute many coroutines over time.
-- Explains *why* coroutines exist before talking about APIs like `launch` or `async`.
+- Explains _why_ coroutines exist before talking about APIs like `launch` or `async`.
 - Recognises that coroutines improve how work is structured; they don't remove the cost of CPU or network operations.
 
 </SeniorAnswer>
