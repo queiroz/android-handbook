@@ -1,47 +1,128 @@
 ---
 id: "COR-002"
 title: "What is the difference between suspending and blocking?"
-description: "What is the difference between suspending and blocking."
-difficulty: "intermediate"
+description: "Understand why suspending frees a thread while blocking keeps it waiting."
+difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
-  - suspend
+  - coroutines
+  - suspension
   - blocking
-prerequisites: []
+  - threads
+prerequisites: ["COR-001"]
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+Blocking makes the thread wait until the work finishes.
 
-## Short interview answer
+Suspending lets the work pause while the thread goes and does something else. When the result is ready, the coroutine resumes from where it left off.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+In a real Android app, this matters because network requests, Room queries and other I/O spend most of their time waiting. Suspending avoids wasting a thread during that wait.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
+
+This question isn't really about the `suspend` keyword.
+
+They're trying to find out whether you understand what should happen to a thread while your code is waiting.
+
+Can you explain why blocking keeps a thread occupied, while suspending lets that thread continue executing other work? Do you understand that coroutines don't magically make code asynchronous or convert blocking APIs into non-blocking ones?
+
+A strong answer focuses on resource usage and explains why suspension exists, rather than simply defining the keyword.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+A common misconception is that putting code inside a coroutine automatically makes it non-blocking.
+
+It doesn't.
+
+If you call a blocking API such as `Thread.sleep()`, the thread is still blocked. Coroutines only free the thread when the operation itself supports suspension, such as `delay()` or a suspending network or database call.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Waiting isn't the problem
+
+Imagine your app starts a network request.
+
+For most of that request, the CPU isn't busy. It's simply waiting for the server to respond.
+
+The important question is: what should happen to the thread during that time?
+
+### Blocking keeps the thread waiting
+
+With a blocking call, the thread can't do anything else until the operation completes.
+
+If enough threads become blocked, your application needs more threads just to keep making progress.
+
+### Suspending lets the work wait
+
+With a suspending call, the coroutine pauses instead of holding onto the thread.
+
+While the request is waiting, that thread is free to execute other coroutines.
+
+When the result arrives, the coroutine resumes and continues as if nothing happened.
+
+<Remember>
+
+**Blocking makes the thread wait. Suspending makes the work wait.**
+
+</Remember>
+
+## Production thinking
+
+Most Android applications spend far more time waiting for I/O than performing CPU-intensive work.
+
+Using suspending APIs for Retrofit, Room and other asynchronous operations allows the same pool of threads to keep useful work moving instead of sitting idle waiting for responses.
+
+Suspending doesn't make slow operations faster—it simply avoids wasting threads while those operations are waiting.
 
 ## Code example
 
-{/* Include a focused example only when code makes the answer clearer. */}
+```kotlin
+lifecycleScope.launch {
+    val user = repository.loadUser()
+    showUser(user)
+}
+```
 
-## Common mistakes
+If `loadUser()` suspends while waiting for the network, the thread is free to execute other coroutines until the response is ready.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+## What separates a senior answer
 
-## Follow-up questions
+<SeniorAnswer>
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+- Explains the difference in terms of what happens to the thread while waiting.
+- Knows that suspending is not the same as asynchronous execution.
+- Understands that a blocking API still blocks even when called from a coroutine.
+- Explains why suspension improves resource utilisation in real Android applications.
 
-## Interviewer notes
-
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- Blocking keeps a thread occupied while it waits.
+- Suspending pauses the work and frees the thread.
+- Suspending doesn't automatically make blocking code non-blocking.
+- The goal is to use threads efficiently while waiting for I/O.
+
+</KeyTakeaways>
+
+## Learn more
+
+- [Coroutines basics — Kotlin Documentation](https://kotlinlang.org/docs/coroutines-basics.html)
+- [Composing suspending functions — Kotlin Documentation](https://kotlinlang.org/docs/composing-suspending-functions.html)
+- [Coroutines best practices — Android Developers](https://developer.android.com/kotlin/coroutines/coroutines-best-practices)
+- [Improve app performance with Kotlin coroutines — Android Developers](https://developer.android.com/topic/performance/threads)
