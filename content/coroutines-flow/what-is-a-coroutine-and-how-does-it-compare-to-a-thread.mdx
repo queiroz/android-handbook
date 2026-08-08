@@ -1,47 +1,137 @@
 ---
 id: "COR-001"
 title: "What is a coroutine and how does it compare to a thread?"
-description: "What is a coroutine and how does it compare to a thread."
+description: "Understand how coroutines suspend work without blocking the threads that execute them."
 difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
+estimatedTime: 8
+answerTime: "~45 sec"
 status: "draft"
 tags:
   - coroutines
   - threads
+  - suspension
+  - concurrency
+  - android
 prerequisites: []
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+A coroutine is a piece of work that can pause without making the thread wait with it.
 
-## Short interview answer
+A thread is what actually runs your code. A coroutine still needs a thread to execute, but it doesn't keep hold of that thread while it's waiting for something like a network request or a database query.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+A single thread can execute many coroutines over time, and when one coroutine suspends, that thread is free to pick up another piece of work. When the suspended coroutine is ready to continue, it can resume later.
 
-## Explanation
+Coroutines don't replace threads—they make better use of them.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
+
+## What the interviewer is testing
+
+This question isn't really about memorising what a coroutine is.
+
+They're trying to understand whether you have the right mental model for how work runs in an Android app.
+
+Can you explain the difference between **blocking a thread** and **suspending a coroutine**? Do you understand that coroutines still need threads to run, rather than replacing them?
+
+A strong answer shows that you understand **why coroutines exist**. It's less about knowing the `launch` API and more about explaining how coroutines let work pause without keeping a thread blocked while it waits.
+
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+Avoid saying a coroutine is a "lightweight thread" and stopping there.
+
+That description is common, but it leaves out the most important idea. A coroutine still needs a thread to run. The real difference is what happens while the work is waiting.
+
+If you call `Thread.sleep()`, the thread sits there doing nothing until the wait finishes.
+
+If you call `delay()`, the coroutine pauses and the thread is free to run something else.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### A thread is what actually runs your code
+
+Think about the Android main thread. Every tap, lifecycle callback and screen update eventually runs on that thread.
+
+If you block it for two seconds, the whole UI feels frozen because that thread can't do anything else until your work finishes.
+
+Creating more threads is possible, but they're operating-system resources. They aren't free, and managing lots of them quickly becomes difficult.
+
+### A coroutine still needs a thread
+
+A coroutine isn't another kind of thread. It's simply a way of describing a piece of work that can pause and continue later.
+
+When that work reaches something like `delay()` or waits for a network response, it doesn't keep the thread occupied. The thread can immediately move on to other work while the coroutine waits.
+
+When the result arrives, the coroutine continues from where it left off.
+
+### The important difference is what happens while waiting
+
+Imagine your app starts twenty network requests.
+
+Most of the time those requests aren't using the CPU—they're just waiting for the server.
+
+With blocking code, each waiting operation ties up a thread.
+
+With coroutines, waiting doesn't have to keep a thread busy, so a much smaller pool of threads can keep lots of work moving.
+
+<Remember>
+
+**A thread can execute many coroutines. A coroutine never owns a thread.**
+
+</Remember>
+
+## Production thinking
+
+In Android, the question usually isn't "Should I use a coroutine instead of a thread?"
+
+It's "What's this work doing while it waits?"
+
+If it's waiting for the network, a database or disk I/O, coroutines let that work pause without keeping a thread blocked.
+
+That doesn't mean coroutines magically make slow code faster. If you do expensive CPU work, the CPU still has to perform that work.
+
+Coroutines make concurrency easier to structure and help your app avoid wasting threads while work is waiting.
 
 ## Code example
 
-{/* Include a focused example only when code makes the answer clearer. */}
+```kotlin
+lifecycleScope.launch {
+    val profile = repository.loadProfile()
+    render(profile)
+}
+```
 
-## Common mistakes
+This code reads from top to bottom, but `loadProfile()` can suspend while waiting for I/O. During that time, the thread is free to run other coroutines instead of sitting idle.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+## What separates a senior answer
 
-## Follow-up questions
+<SeniorAnswer>
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+- Explains the difference between blocking and suspending instead of calling coroutines "lightweight threads".
+- Knows that coroutines still execute on threads.
+- Understands that one thread can execute many coroutines over time.
+- Explains *why* coroutines exist before talking about APIs like `launch` or `async`.
+- Recognises that coroutines improve how work is structured; they don't remove the cost of CPU or network operations.
 
-## Interviewer notes
-
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- A thread is what executes code.
+- A coroutine is a piece of work that can suspend and continue later.
+- Suspending lets other work use the thread while you're waiting.
+- Coroutines don't replace threads—they make better use of them.
+- Understanding blocking vs suspending is more important than memorising coroutine APIs.
+
+</KeyTakeaways>

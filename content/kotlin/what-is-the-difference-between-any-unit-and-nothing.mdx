@@ -34,9 +34,12 @@ So I think of them as **some value, no useful result, and no possible result**.
 
 ## What the interviewer is testing
 
-The useful part of this question is whether you understand that Kotlin models **what an expression can produce** as part of its type system.
+This looks like a type-system question, but interviewers are usually trying to understand how you think about code paths.
 
-A strong answer does more than compare `Any` with Java's `Object` or `Unit` with `void`. It explains why `Nothing` can appear where another type is expected, why `Unit` works naturally in function types, and why `Any` is usually a sign that the API has intentionally given up more specific type information.
+Can you tell the difference between returning a value, completing work without returning anything useful, and reaching a point in the code that can never successfully return?
+
+That's the mental model they're looking for. It shows you understand what a piece of code can actually produce, not just the names of Kotlin's types.
+
 
 ## ❌ Common mistake
 

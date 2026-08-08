@@ -29,9 +29,14 @@ related: []
 
 ## What the interviewer is testing
 
-This looks like a syntax question, but the useful distinction is really about **what is allowed to change, and when the value becomes known**.
+This question sounds like it's about Kotlin keywords, but it rarely is.
 
-A good answer separates reassignment from mutation. It also recognises that `const val` is not simply another way to write `val`; it exists for values the compiler must be able to treat as constants before the application is running.
+Interviewers already know you can memorise what `val`, `var`, and `const val` do.
+
+What they're trying to discover is whether you understand **what is allowed to change**, **who owns that change**, and **why some values have to exist before your application starts running**.
+
+That's the difference between someone who knows Kotlin syntax and someone who understands Kotlin's design.
+
 
 ## ❌ Common mistake
 

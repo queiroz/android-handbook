@@ -34,9 +34,14 @@ So I think of `lateinit` as **assignment later**, and `lazy` as **creation on fi
 
 ## What the interviewer is testing
 
-The syntax is straightforward. The useful distinction is whether initialization depends on **something happening later** or whether the object already knows **how to create itself when it is first needed**.
+This isn't really a question about delayed initialization.
 
-A strong answer also connects that decision to ownership and lifetime. `lateinit` makes sense when another phase of the object's lifecycle supplies the value. `lazy` makes sense when the owner can create the value itself and wants to defer that work until first use.
+It's about ownership.
+
+Can you recognise when something else is responsible for providing a value, and when your own code should create it?
+
+A strong answer explains why `lateinit` and `lazy` solve different problems instead of treating them as interchangeable ways to avoid initializing a property immediately.
+
 
 ## ❌ Common mistake
 
