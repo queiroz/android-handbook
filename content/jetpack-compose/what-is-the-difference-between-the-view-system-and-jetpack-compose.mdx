@@ -1,47 +1,170 @@
 ---
 id: "CMP-001"
 title: "What is the difference between the View system and Jetpack Compose?"
-description: "What is the difference between the View system and Jetpack Compose."
+description: "Compare the View system and Compose by how each keeps UI in sync with changing state."
 difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
+answerTime: "~30 sec"
+status: "published"
 tags:
   - compose
   - views
+  - ui-state
+  - declarative-ui
 prerequisites: []
-related: []
+related:
+  - CMP-002
+  - CMP-003
+  - CMP-006
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+The main difference is **how the UI is updated when state changes**.
 
-## Short interview answer
+With the View system, you work with mutable View objects and your code updates them directly—for example, changing text, visibility, or list contents.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+With Jetpack Compose, you describe what the UI should look like for the current state. When that state changes, Compose updates the parts of the UI that depend on it.
 
-## Explanation
+That is why Views are usually described as **imperative** and Compose as **declarative**. The important difference is not XML versus Kotlin; it is who is responsible for keeping the screen in sync with state.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The interviewer is checking whether you understand the **UI model behind the two toolkits**, not whether you can list syntax differences.
 
-## Common mistakes
+A strong answer explains who is responsible for keeping the screen consistent as state changes, then shows enough judgement to recognise why Compose fits modern state-driven Android UI without pretending that existing View-based applications are badly designed.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+## ❌ Common mistake
 
-## Follow-up questions
+<CommonMistake>
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+Avoid stopping at:
 
-## Interviewer notes
+> "Views are imperative and Compose is declarative."
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+That is the terminology, not the explanation.
+
+The useful distinction is what happens when state changes. With Views, your code mutates the existing UI. With Compose, the UI is described from state and the framework applies the required updates.
+
+Also avoid saying that Compose is automatically faster or that View-based UI is obsolete. Both can perform well, and existing View code can remain perfectly valid.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Why Android moved toward Compose
+
+The View system was designed around a hierarchy of UI objects that your code changes over time. That model works, and Android applications have used it successfully for years.
+
+The friction becomes clearer as screens get more dynamic.
+
+Imagine an order screen that can be loading, showing content, refreshing, or displaying an error. With Views, the screen might react to a new state by changing several things independently:
+
+```kotlin
+progressBar.isVisible = state.loading
+contentGroup.isVisible = state.order != null
+errorView.isVisible = state.error != null
+ordersAdapter.submitList(state.items)
+```
+
+Your code owns that coordination. If one update is missed, the View hierarchy can temporarily represent a state the application never intended—for example, showing old content and a new error at the same time.
+
+Compose was designed around a different model: **describe the UI for the state you have now**.
+
+```kotlin
+when (state) {
+    OrderUiState.Loading -> LoadingScreen()
+    is OrderUiState.Content -> OrderScreen(state)
+    is OrderUiState.Error -> ErrorScreen(state.message)
+}
+```
+
+Now the code describes the possible screens instead of spelling out every mutation required to move the old UI into the new one.
+
+That is the practical meaning of declarative UI.
+
+<Remember>
+
+**Views ask your code to update the UI. Compose asks your code to describe the UI for the current state.**
+
+</Remember>
+
+### The difference is bigger than XML versus Kotlin
+
+Compose being Kotlin-first matters because UI pieces are ordinary composable functions. They take data, emit UI, call other composables, and can use normal Kotlin control flow.
+
+That makes reusable components, conditional UI, custom styling, and dynamic layouts easier to compose without spreading the same screen across XML, View objects, adapters, listeners, and update code.
+
+But Kotlin is not the real architectural change. The bigger change is still the relationship between **state and UI**.
+
+A well-designed View-based application can already use a `ViewModel`, immutable UI state, and unidirectional data flow. Compose does not invent those ideas; it makes the UI layer fit them more naturally because the screen can be rendered directly from state.
+
+### What happens when state changes
+
+Compose does not blindly redraw the entire screen whenever one value changes.
+
+When observed state changes, Compose can re-run the affected composable work and skip parts whose inputs have not changed. Depending on where state is read, later layout or drawing work can also be avoided.
+
+You do not need to explain the recomposition machinery in this answer. The useful interview point is simply that Compose can update the UI from state without requiring your code to manually mutate every affected View.
+
+## Production thinking
+
+For new Android UI, Compose is Google's recommended direction. That still does **not** make a rewrite of a healthy View-based application an automatic engineering win.
+
+Views and Compose interoperate, so mature applications can adopt Compose incrementally. A team might use Compose for a new feature, migrate a screen when it is already being redesigned, and leave stable View screens alone until there is a reason to change them.
+
+The trade-off is less about which toolkit is "better" and more about the cost of the UI model you are maintaining:
+
+| View system | Jetpack Compose |
+| --- | --- |
+| Mature and deeply established in existing Android codebases | Google's recommended toolkit for new Android UI |
+| Direct control over a long-lived View hierarchy | UI is described from current state |
+| Existing custom Views, libraries, and tests may already be proven | Kotlin functions make UI composition and reuse more direct |
+| Dynamic screens can accumulate manual update and coordination code | Removes much of that manual state-to-UI synchronisation |
+| No migration cost when the existing screen already works well | Requires the team to understand state, recomposition, and side-effect boundaries |
+
+Compose also does not fix poor architecture for you. If state ownership is unclear, a `ViewModel` exposes several conflicting sources of truth, or side effects are mixed into rendering logic, the UI can still become difficult to reason about.
+
+A senior engineer therefore separates two decisions: **how the application owns state**, and **which UI toolkit renders it**.
+
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains the comparison through **how state becomes UI**, not merely XML versus Kotlin.
+- Knows that View-based applications can already use good state ownership and unidirectional data flow; Compose changes how the UI layer expresses that model.
+- Understands that Compose updates affected UI work from state changes without claiming that every Compose screen is automatically faster than Views.
+- Recognises why Kotlin-based composition improves reuse and dynamic UI without presenting "no XML" as the main reason Compose exists.
+- Separates UI toolkit choice from architecture: Compose does not decide state ownership or side-effect boundaries for you.
+- Chooses incremental migration based on product value, codebase risk, and team capability rather than rewriting stable View code for fashion.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- With Views, your code mutates UI objects when state changes.
+- With Compose, you describe the UI for the current state and Compose applies the required updates.
+- "Imperative versus declarative" is the label; **state-to-UI responsibility** is the useful mental model.
+- Compose makes state-driven UI and reusable Kotlin components more natural, but it does not replace good architecture.
+- Compose is the recommended direction for new Android UI, while existing View code can migrate incrementally when there is a reason to do so.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Thinking in Compose — Android Developers](https://developer.android.com/develop/ui/compose/mental-model)
+- [Jetpack Compose — Android Developers](https://developer.android.com/compose)
+- [Migration strategy — Android Developers](https://developer.android.com/develop/ui/compose/migrate/strategy)
+- [Interoperability APIs — Android Developers](https://developer.android.com/develop/ui/compose/migrate/interoperability-apis)
+- [Android UI Development is Compose First — Android Developers Blog](https://android-developers.googleblog.com/2026/05/android-ui-development-is-compose-first.html)
+
+</ReferenceList>

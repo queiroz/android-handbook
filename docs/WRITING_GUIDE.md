@@ -319,3 +319,8 @@ Before considering a page complete, verify:
 - Key takeaways fit comfortably on one screen.
 - Learn more contains opened and verified authoritative sources.
 - The page is useful both for interview revision and for relearning the engineering topic later.
+
+
+### Answer the interview question, not the subject
+
+Every page answers a single interview question, not an entire technology. Resist turning a question into a mini-guide for the framework. The interview-ready answer should answer the interviewer's question first; deeper concepts belong later on the page or in follow-up questions.
