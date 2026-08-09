@@ -1,47 +1,173 @@
 ---
 id: "COR-003"
 title: "What is the difference between launch and async?"
-description: "What is the difference between launch and async."
+description: "Choose between launch and async based on what the caller needs back from the work."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
+estimatedTime: 8
+answerTime: "~45 sec"
 status: "draft"
 tags:
+  - coroutines
   - launch
   - async
-prerequisites: []
+  - deferred
+  - concurrency
+prerequisites: ["COR-001", "COR-002"]
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+Both `launch` and `async` start child coroutines. The difference is whether the caller needs a result back.
 
-## Short interview answer
+Use `launch` when you want the work to happen and you do not need a result from that coroutine. It gives you a `Job`, so you can still cancel it or wait for it to finish.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+Use `async` when the work needs to produce a value. It gives you a `Deferred<T>`, and you get that value with `await()`.
 
-## Explanation
+In practice, `async` is most useful when independent operations can run at the same time and you need their results before continuing. If you do not need a value back, `launch` usually makes the intent clearer.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The interviewer is not really testing whether you remember that `launch` returns `Job` and `async` returns `Deferred`.
 
-## Common mistakes
+They want to know whether you can look at a piece of concurrent work and decide **what the caller actually needs from it**.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+Does the caller only need the work to happen? Or does the next step depend on a value that work will produce?
 
-## Follow-up questions
+A strong answer makes that decision clear first. `Job`, `Deferred` and `await()` are just the API details that follow from it.
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+## ❌ Common mistake
 
-## Interviewer notes
+<CommonMistake>
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+Don't reach for `async` just because you want something to run concurrently.
+
+`launch` can start concurrent work too. `async` is useful when that work represents a value you need later.
+
+Another common smell is:
+
+```kotlin
+val profile = async { repository.loadProfile() }.await()
+```
+
+If nothing else can make progress while `loadProfile()` runs, you've created another coroutine only to wait for it immediately.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+### Sometimes the work just needs to happen
+
+Imagine a screen opens and your `ViewModel` needs to refresh some cached data.
+
+The screen is not waiting for a value from that child coroutine. You just want the refresh to start and remain tied to the `ViewModel` lifecycle:
+
+```kotlin
+viewModelScope.launch {
+    repository.refreshUser()
+}
+```
+
+That is what `launch` communicates: start this work. The returned `Job` is there if you need to cancel it or observe when it finishes.
+
+### Sometimes the caller needs the results
+
+Now imagine the screen needs a profile and a set of permissions before it can build its UI model.
+
+Those requests do not depend on each other, so there is no reason to wait for one before starting the other:
+
+```kotlin
+val session = coroutineScope {
+    val profile = async { profileRepository.loadProfile() }
+    val permissions = async { permissionsRepository.loadPermissions() }
+
+    UserSession(
+        profile = profile.await(),
+        permissions = permissions.await()
+    )
+}
+```
+
+Here `async` earns its place. Each child coroutine represents a result the caller needs, and the two independent operations can make progress at the same time.
+
+### The decision belongs to the caller
+
+You can put side effects inside `async`, and you can ignore values inside `launch`, but neither makes the intent clearer.
+
+Before choosing a builder, ask:
+
+> **Does the caller need a value back from this work?**
+
+If not, `launch` is usually the clearer choice.
+
+If yes—and especially if independent operations can overlap—`async` gives you a value you can await when you need it.
+
+<Remember>
+
+**Choose based on what the caller needs back, not on which builder sounds more asynchronous.**
+
+</Remember>
+
+## Production thinking
+
+`async` is not the "more advanced" version of `launch`.
+
+Every `Deferred` is a promise your code now has to keep.
+
+Somebody has to await it.
+
+Somebody owns its cancellation.
+
+Somebody owns what happens if it fails.
+
+That extra machinery is useful when it buys you something—for example, loading independent pieces of data at the same time before building a screen.
+
+But if one operation needs the result of another, the work is still sequential:
+
+```kotlin
+val user = repository.loadUser()
+val orders = repository.loadOrders(user.id)
+```
+
+Wrapping both calls in `async` would not remove that dependency.
+
+The goal is not to use more coroutine builders. It is to make the relationship between the caller and the work obvious.
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Starts by explaining the caller's intent before mentioning coroutine builders.
+- Knows that both `launch` and `async` can start concurrent work; `async` is not inherently faster or "more asynchronous".
+- Uses `async` when independent operations can overlap and their results are genuinely needed later.
+- Avoids `async { ... }.await()` when it creates no useful concurrency.
+- Understands that a `Deferred` is a result the caller is responsible for consuming, while cancellation and failure still follow coroutine scope rules.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- Both `launch` and `async` start coroutines.
+- `launch` fits work where the caller does not need a value back.
+- `async` fits work that produces a value the caller will later `await()`.
+- `async` is useful when independent work can overlap and the results need to be combined.
+- The useful question is: **what does the caller need back from this work?**
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Composing suspending functions — Kotlin Documentation](https://kotlinlang.org/docs/composing-suspending-functions.html)
+- [`launch` — kotlinx.coroutines API](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/launch.html)
+- [`async` — kotlinx.coroutines API](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/async.html)
+- [Coroutines best practices — Android Developers](https://developer.android.com/kotlin/coroutines/coroutines-best-practices)
+
+</ReferenceList>
