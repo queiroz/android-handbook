@@ -1,46 +1,107 @@
 ---
 id: "CMP-002"
 title: "What is composition?"
-description: "What is composition."
+description: "Understand what Compose keeps after your composable functions run."
 difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
-tags:
-  - composition
-prerequisites: []
+answerTime: "~30 sec"
+status: "published"
+tags: [composition]
+prerequisites: ["CMP-001"]
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+**Composition is Compose's internal representation of the UI that currently exists.**
 
-## Short interview answer
+Your composable functions describe what the UI should look like. Composition is what Compose keeps after that description has been turned into a screen.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+When state changes, Compose updates that existing Composition instead of treating every execution as a brand-new screen. That's why recomposition can efficiently update only the parts of the UI that actually changed.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
 
-## Code example
+The interviewer isn't asking about hidden runtime internals.
 
-{/* Include a focused example only when code makes the answer clearer. */}
+They're checking whether you understand **what survives after a composable function finishes executing**. A strong answer separates the code that describes the UI from the Composition that Compose maintains over time.
 
-## Common mistakes
+## ❌ Common mistake
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+<CommonMistake>
 
-## Follow-up questions
+Avoid thinking:
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+> "Composition is just the first render."
 
-## Interviewer notes
+Initial composition is **how the Composition is created**.
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+The Composition itself continues to exist afterwards and evolves as state changes. Confusing those ideas makes concepts like recomposition and `remember` much harder to understand.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a checkout screen.
+
+Your composable describes two possible UIs:
+
+- Empty cart
+- Checkout form
+
+When the user adds an item, Compose doesn't rediscover the entire screen. It already knows what UI currently exists because it maintains the Composition. It simply updates the parts that changed.
+
+A useful mental model is:
+
+- Your composable functions describe the screen.
+- The Composition is the screen Compose is currently maintaining.
+
+## Production thinking
+
+Understanding Composition changes how you reason about Compose.
+
+Engineers who don't understand it often assume every recomposition rebuilds the entire UI.
+
+Engineers who do understand it think in terms of **updating an existing UI** rather than recreating one from scratch.
+
+That mental model makes recomposition, state ownership and remembered values much easier to understand.
+
+<Remember>
+
+**Your code describes. Composition remembers.**
+
+</Remember>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains the difference between composable functions and the Composition itself.
+- Understands that Composition survives after the initial composition.
+- Avoids describing Composition as merely "the first render."
+- Connects Composition to why recomposition can efficiently update existing UI.
+- Explains the concept without diving into SlotTable or runtime implementation details.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- Composition is Compose's maintained representation of the current UI.
+- Composable functions describe the UI; the Composition stores the current structure.
+- Initial composition creates the Composition; recomposition updates it.
+- Understanding Composition makes later Compose topics much easier to reason about.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Composition lifecycle — Android Developers](https://developer.android.com/develop/ui/compose/lifecycle)
+
+</ReferenceList>
