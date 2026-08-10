@@ -1,46 +1,138 @@
 ---
 id: "CMP-003"
 title: "What is recomposition and what triggers it?"
-description: "What is recomposition and what triggers it."
+description: "Understand how Compose knows what needs to update when state changes."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
-tags:
-  - recomposition
-prerequisites: []
+answerTime: "~30 sec"
+status: "published"
+tags: [recomposition]
+prerequisites: ["CMP-002"]
 related: []
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+Recomposition is Compose **re-running composable code to update an existing Composition when the UI it describes may have changed**.
 
-## Short interview answer
+The most common trigger is a change to **observable state that was read during composition**. Compose remembers where that state was read, so when the value changes it can schedule the affected work to run again. A composable can also run again when its caller recomposes and passes it different inputs.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+The important point is that a state change does **not** mean the whole screen is rebuilt. Compose re-runs the work that may now produce different UI and can skip work whose inputs have not changed.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
 
-## Code example
+The interviewer is checking whether you understand **why Compose knows which UI work may be stale**, not whether you can repeat that "state changes trigger recomposition."
 
-{/* Include a focused example only when code makes the answer clearer. */}
+A strong answer makes the dependency clear: Compose observes reads of state while building the UI. When that observed state changes, Compose knows which part of the composition depended on it and can schedule that work again.
 
-## Common mistakes
+That distinction matters because Compose does not watch every Kotlin variable in your app. A plain variable changing is not enough by itself; the UI needs to depend on state that Compose can observe, or receive new inputs from a caller that is already recomposing.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+## ❌ Common mistake
 
-## Follow-up questions
+<CommonMistake>
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+Avoid saying:
 
-## Interviewer notes
+> "When state changes, Compose recomposes the whole screen."
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+That is too broad. Compose tracks **where observable state is read**. When a value changes, the work that depended on that read can be scheduled again, while unrelated work can often be skipped.
+
+Also avoid treating recomposition itself as a performance bug. Recomposition is how Compose keeps the UI in sync with state. The real problem is doing unnecessary or expensive work when recomposition happens.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine an order screen with order details, a cart badge, and a loading indicator.
+
+The cart badge cares about `cartCount`. The order details do not.
+
+```kotlin
+@Composable
+fun OrderScreen(
+    order: OrderUiModel,
+    cartCount: Int,
+) {
+    OrderDetails(order)
+    CartBadge(cartCount)
+}
+
+@Composable
+fun CartBadge(cartCount: Int) {
+    Text(cartCount.toString())
+}
+```
+
+Now imagine the user adds an item to the cart.
+
+If the observable state behind `cartCount` changes, Compose can schedule the composable work that depends on that value. `OrderDetails` does not suddenly need new UI just because the cart count changed, so Compose can avoid unnecessary work there.
+
+There are two useful ways recomposition commonly reaches a composable:
+
+- **Observed state changes.** A composable read observable state during composition, and that value later changes.
+- **Its inputs change.** A parent recomposes and calls the composable again with different parameters.
+
+That is a better model than "any variable changed, so Compose reruns the screen."
+
+When you're debugging recomposition, don't start by asking only **"what changed?"** Ask:
+
+> **"Where was that state read, and which UI actually depends on it?"**
+
+That question scales much better once a screen has real ViewModel state, loading states, lists, and several independent UI regions.
+
+## Production thinking
+
+In production, you normally should not be trying to stop recomposition. **Recomposition is expected.** What matters is keeping the work it causes easy to reason about and cheap to run.
+
+A common smell is a large screen composable that consumes one big UI-state object and passes that whole object everywhere. It may work perfectly well, but it also makes it harder to see which parts of the screen actually depend on which values.
+
+Prefer clear state ownership and pass each UI component the state it genuinely needs. Keep expensive calculations, I/O, and business logic out of composable bodies so running them again stays cheap.
+
+If a screen becomes difficult to reason about, I would look at **state ownership and state boundaries first**, not reach immediately for recomposition tricks. Performance tools and stability details matter when you have a measured problem, but they should come after the state model is clear.
+
+<Remember>
+
+**When you're asking why something recomposed, follow the state read.**
+
+</Remember>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Defines recomposition as updating the existing Composition by re-running composable work that may now produce different UI.
+- Answers the trigger directly: observable state read during composition changing is the common trigger, and changed inputs can cause a composable to run again when its caller recomposes.
+- Knows Compose does not watch arbitrary Kotlin variables; the UI must depend on observable state or receive new inputs through composition.
+- Explains recomposition through **state dependencies**, not by saying the whole screen redraws whenever anything changes.
+- Recognises that unchanged work can often be skipped and does not equate "recomposed" with "redrawn."
+- Treats recomposition as normal framework behaviour and focuses production tuning on clear state boundaries and cheap composable work.
+- Knows when to stop: stability, strong skipping, snapshots, and phase-specific invalidation are deeper follow-up topics rather than part of the opening answer.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- Recomposition re-runs composable work so Compose can update the existing Composition.
+- A common trigger is **observable state that was read during composition changing**.
+- A composable can also run again when its caller recomposes and supplies different inputs.
+- Compose follows state dependencies; it does not watch every Kotlin variable or rebuild the whole screen for every change.
+- Good production code keeps state boundaries clear and composable work cheap rather than trying to eliminate recomposition.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Thinking in Compose — Android Developers](https://developer.android.com/develop/ui/compose/mental-model)
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Lifecycle of composables — Android Developers](https://developer.android.com/develop/ui/compose/lifecycle)
+- [Phases of Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/phases)
+
+</ReferenceList>
