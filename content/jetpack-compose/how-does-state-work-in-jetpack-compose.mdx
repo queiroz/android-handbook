@@ -1,0 +1,143 @@
+---
+id: "CMP-004"
+title: "How does state work in Jetpack Compose?"
+description: "Understand what state means in Compose and how the current state drives what the UI displays."
+difficulty: "foundational"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 6
+answerTime: "~30 sec"
+status: "published"
+tags:
+  - compose-state
+  - state
+  - observable-state
+prerequisites:
+  - CMP-003
+related:
+  - CMP-003
+---
+
+<ShortAnswer>
+
+**State is the current truth the UI is rendering.**
+
+If a screen can be loading, showing an order, or showing an error, those values are part of its state because changing them changes what the user should see.
+
+Compose lets the UI read that state and describe the screen from its current value. When observable state that the UI depends on changes, Compose can re-run the affected composable work and update the existing Composition.
+
+The important distinction is that **state is the data that changes, not the API used to hold it**.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+This question sounds like it's about Compose state APIs, but the interviewer is really checking whether you understand the relationship between **state and UI**.
+
+A strong answer explains that the screen is a description of its current state. When that state changes, the UI may need to describe something different, and Compose uses observable state to connect those changes to recomposition.
+
+If you jump straight to `remember`, `mutableStateOf`, or `StateFlow`, you're talking about storage and lifetime before explaining what state actually is.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "State in Compose is anything stored in `mutableStateOf`."
+
+`mutableStateOf` is one way to make a value observable to Compose. It isn't the definition of state.
+
+A loading flag, selected filter, cart count, current form input, or error can all be state because their current value affects what the UI should show.
+
+Also avoid assuming that changing an ordinary `var` automatically updates Compose. A value can change in memory without Compose knowing that UI depending on it may now be out of date.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine the order screen from the previous questions.
+
+At different moments it may need to show:
+
+```text
+Loading
+Order #42
+Unable to load order
+```
+
+Those are not three different screens. They're three possible states of the same screen.
+
+A composable can describe the UI directly from whichever state is current:
+
+```kotlin
+@Composable
+fun OrderScreen(state: OrderUiState) {
+    when (state) {
+        OrderUiState.Loading -> LoadingContent()
+        is OrderUiState.Content -> OrderContent(state.order)
+        is OrderUiState.Error -> ErrorContent(state.message)
+    }
+}
+```
+
+The important part isn't the `when`. It's that the composable doesn't need instructions like "hide the spinner, show the content, clear the error."
+
+It receives the current truth and describes the UI for that truth.
+
+When the state changes from `Loading` to `Content`, Compose can run the UI that depends on that value again and update the existing Composition. That's the connection between **state** and the recomposition model from CMP-003.
+
+<Remember>
+
+**State is the current truth the UI renders. The UI should describe that truth, not manually chase every change.**
+
+</Remember>
+
+Once that relationship is clear, the next question becomes about **lifetime**: if some state belongs to the UI, how do you keep it around when composables execute again or the screen is recreated?
+
+## Production thinking
+
+State becomes much more important when a production screen can represent several conditions at once.
+
+Imagine checkout with loading, payment availability, validation errors, a selected delivery option, and a network failure. If those values are scattered across unrelated mutable variables, it's easy for the UI to describe combinations that should never exist.
+
+The goal isn't to make everything "Compose state." The goal is to make the **current UI truth explicit** so the screen can be reasoned about from its inputs.
+
+That usually means giving a composable the state it needs, keeping that state coherent, and letting the UI derive what it displays from those values rather than manually coordinating a chain of UI mutations.
+
+Where that state should live and who should own it are separate decisions. Those come next when you talk about state lifetime, hoisting, and screen-level state holders.
+
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Defines state by **what it represents for the UI**, not by a specific Compose API.
+- Connects state changes to the dependency and recomposition model without claiming that every mutable variable is observable.
+- Treats the UI as a description of the current state instead of a collection of widgets that must be manually synchronized.
+- Recognises that the shape of state matters: unclear or contradictory state makes the UI harder to reason about.
+- Keeps **what the state is**, **how long it survives**, and **who owns it** as separate engineering decisions.
+- Stops before turning the answer into a catalogue of `remember`, `StateFlow`, ViewModel, or snapshot APIs.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- State is the current truth that determines what the UI should display.
+- Compose UI reads state and describes the screen from its current value.
+- Observable state changes can invalidate UI that depends on that value and lead to recomposition.
+- State is the data that changes; `mutableStateOf`, `StateFlow`, and other APIs are ways of exposing or holding it.
+- An ordinary mutable variable does not automatically tell Compose that dependent UI is out of date.
+- State lifetime and state ownership are separate questions that belong in the next parts of the Compose story.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Thinking in Compose — Android Developers](https://developer.android.com/develop/ui/compose/mental-model)
+- [State in production — Android Developers](https://developer.android.com/codelabs/jetpack-compose-state)
+
+</ReferenceList>

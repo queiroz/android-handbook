@@ -15,75 +15,78 @@ related: []
 
 <ShortAnswer>
 
-**Composition is Compose's internal representation of the UI that currently exists.**
+**Composition is the UI that Compose remembers between executions of your composable functions.**
 
-Your composable functions describe what the UI should look like. Composition is what Compose keeps after that description has been turned into a screen.
+Your composable functions can execute many times while a screen is alive. Compose doesn't start from nothing each time. It keeps track of the UI it already has and updates that existing UI as state changes.
 
-When state changes, Compose updates that existing Composition instead of treating every execution as a brand-new screen. That's why recomposition can efficiently update only the parts of the UI that actually changed.
+That's why Composition matters. It gives the screen continuity. Without it, every execution would have to build the entire UI again from scratch.
 
 </ShortAnswer>
 
 ## What the interviewer is testing
 
-The interviewer isn't asking about hidden runtime internals.
+This question isn't really about defining the word *Composition*.
 
-They're checking whether you understand **what survives after a composable function finishes executing**. A strong answer separates the code that describes the UI from the Composition that Compose maintains over time.
+The interviewer wants to know whether you understand why Compose can execute composable functions repeatedly without treating every execution as a completely new screen.
+
+A strong answer explains that Compose remembers the existing UI first. The runtime details come later.
 
 ## ❌ Common mistake
 
 <CommonMistake>
 
-Avoid thinking:
-
 > "Composition is just the first render."
 
-Initial composition is **how the Composition is created**.
+Initial composition is how Compose creates the UI for the first time.
 
-The Composition itself continues to exist afterwards and evolves as state changes. Confusing those ideas makes concepts like recomposition and `remember` much harder to understand.
+Composition is what continues to exist afterwards. It's the remembered UI that Compose maintains as the screen changes.
 
 </CommonMistake>
 
 ## If they ask you to elaborate
 
-Imagine a checkout screen.
+Imagine an order screen.
 
-Your composable describes two possible UIs:
+The user opens the screen and sees a loading indicator.
 
-- Empty cart
-- Checkout form
+A few moments later, the order arrives.
 
-When the user adds an item, Compose doesn't rediscover the entire screen. It already knows what UI currently exists because it maintains the Composition. It simply updates the parts that changed.
+Your composable function runs again, but Compose doesn't throw away everything it already knows about that screen. It already has a remembered UI to work from. It compares the new description with what already exists and updates what needs to change.
 
-A useful mental model is:
+That's why it's useful to think about two different things:
 
-- Your composable functions describe the screen.
-- The Composition is the screen Compose is currently maintaining.
-
-## Production thinking
-
-Understanding Composition changes how you reason about Compose.
-
-Engineers who don't understand it often assume every recomposition rebuilds the entire UI.
-
-Engineers who do understand it think in terms of **updating an existing UI** rather than recreating one from scratch.
-
-That mental model makes recomposition, state ownership and remembered values much easier to understand.
+- Your composable functions describe the UI.
+- Composition is the UI Compose is currently maintaining.
 
 <Remember>
 
-**Your code describes. Composition remembers.**
+**Your code describes the UI. Composition is the UI Compose remembers.**
 
 </Remember>
+
+The next question is naturally:
+
+If Compose remembers the existing UI, how does it know which parts actually need to run again? That's where recomposition comes in.
+
+## Production thinking
+
+The value of Composition becomes much clearer on large screens.
+
+A production screen might switch between loading, content, errors, empty states, dialogs and refresh operations many times during its lifetime.
+
+Compose doesn't recreate that screen from scratch every time one of those states changes. It keeps an existing UI and updates it as the application state evolves.
+
+That's where Composition starts to matter in real applications. The more state a screen has, the more valuable that continuity becomes.
 
 ## What separates a senior answer
 
 <SeniorAnswer>
 
-- Explains the difference between composable functions and the Composition itself.
-- Understands that Composition survives after the initial composition.
-- Avoids describing Composition as merely "the first render."
-- Connects Composition to why recomposition can efficiently update existing UI.
-- Explains the concept without diving into SlotTable or runtime implementation details.
+- Explains Composition as the UI Compose remembers, not as a runtime data structure.
+- Separates composable functions from the Composition they produce.
+- Understands that Composition survives beyond the first execution.
+- Connects Composition to why recomposition is possible.
+- Avoids explaining SlotTable or other runtime internals.
 
 </SeniorAnswer>
 
@@ -91,10 +94,10 @@ That mental model makes recomposition, state ownership and remembered values muc
 
 <KeyTakeaways>
 
-- Composition is Compose's maintained representation of the current UI.
-- Composable functions describe the UI; the Composition stores the current structure.
-- Initial composition creates the Composition; recomposition updates it.
-- Understanding Composition makes later Compose topics much easier to reason about.
+- Composition is the UI Compose remembers between executions.
+- Composable functions describe the UI; Composition maintains the current UI.
+- Initial composition creates it; later updates build on it.
+- Composition gives the UI continuity and prepares the ground for recomposition.
 
 </KeyTakeaways>
 
