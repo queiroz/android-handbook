@@ -84,7 +84,7 @@ The initial foundation contains draft placeholder files with HTML authoring comm
 2. Confirm the stable ID and category.
 3. Research authoritative technical sources.
 4. Write the short answer first.
-5. Add only enough explanation and code to support that answer.
+5. Add only enough explanation and code to support that answer. For production examples, explain the decision and failure mode rather than narrating the API.
 6. Add a short set of realistic follow-ups that already have handbook pages, and link them directly. Draft/review targets will stay hidden until published.
 7. Run validation and inspect the rendered page.
 8. Submit one focused question or tightly related correction per pull request when practical.
@@ -101,3 +101,90 @@ A senior answer is not one that mentions more APIs.
 A senior answer demonstrates engineering judgement by discussing ownership, lifecycle, boundaries, trade-offs, production implications, and why one solution is preferable in context.
 
 The goal is to teach how experienced engineers think, not simply what they know.
+
+
+## Engineering Questions vs Interview Questions
+
+The interview question is the entry point, not the lesson.
+
+When proposing or drafting a page, identify the **hidden engineering question** the interviewer is really trying to evaluate.
+
+Examples:
+
+- **Interview question:** What are Compose side-effect APIs?
+  - **Hidden engineering question:** Does the candidate understand the boundary between describing the UI and making the application do work?
+
+- **Interview question:** What is state hoisting?
+  - **Hidden engineering question:** Does the candidate understand ownership?
+
+- **Interview question:** remember vs rememberSaveable
+  - **Hidden engineering question:** Does the candidate understand state lifetime?
+
+- **Interview question:** collectAsStateWithLifecycle
+  - **Hidden engineering question:** Does the candidate understand lifecycle ownership?
+
+Teach the engineering question first. Let the technology appear naturally as the solution.
+
+### Technology-first vs Problem-first
+
+Not every page should be written the same way.
+
+**Category A – Technology-first**
+
+The technology itself is the lesson (for example: `val` vs `var`, `lateinit` vs `lazy`, `remember` vs `rememberSaveable`).
+
+**Category B – Problem-first**
+
+The technology exists because it solves a broader engineering problem (for example: ViewModel, side effects, WorkManager, Navigation, Lifecycle, Room, StateFlow).
+
+For Category B pages:
+
+1. Identify the engineering problem.
+2. Explain why it exists using real production situations.
+3. Build the mental model.
+4. Introduce the technology as one solution.
+5. Use APIs and implementation details to reinforce the mental model, not replace it.
+6. In Production Thinking, walk through realistic choices the way engineers would during pair programming or review: establish why the work belongs at that boundary, why the chosen approach fits, and what failure a different choice would create.
+
+
+### Production examples should expose the decision
+
+When a page needs real-world code, do not stop at showing a plausible snippet and explaining what the API does. Make the engineering decision behind the code visible.
+
+For each substantial production example, contributors and reviewers should be able to answer:
+
+- Why does this work belong here?
+- Why is this API or approach appropriate for that ownership and lifetime?
+- What would go wrong if the work were started, stored, observed, or cleaned up differently?
+
+These are drafting and review questions, not mandatory reader-facing headings. The final explanation should read like a useful engineering conversation: concrete, contextual, and focused on the decision. Introduce API behaviour only to the depth needed to make that decision understandable.
+
+This rule applies beyond Compose. A ViewModel example might expose ownership; a coroutine example might expose cancellation; a Room example might expose consistency or source-of-truth boundaries. The technology changes, but the review style remains the same.
+
+### Keep the interview question realistic
+
+The hidden engineering question guides the lesson; it does **not** replace the interview question.
+
+Question titles should still sound like something an interviewer could plausibly ask in an Android interview. When an API-shaped question pushes the page toward documentation, prefer a broader but still realistic interview phrasing that exposes the candidate's reasoning.
+
+Prefer:
+
+> What are side effects in Compose and how should they be handled?
+
+Over:
+
+> What are the Compose side-effect APIs and when do you use them?
+
+The first question can still lead to `LaunchedEffect`, `DisposableEffect`, and the other APIs, but it gives the candidate room to explain the problem before naming solutions.
+
+Do not broaden a question so far that it stops resembling an interview question. The handbook remains interview-first.
+
+### The API removal test
+
+Before drafting a problem-first page, temporarily remove the framework and API names from the explanation and ask:
+
+> Would the engineering lesson still make sense?
+
+If the answer is no, the page is probably teaching the mechanism before the problem.
+
+For example, a Compose side-effects page should still make sense without `LaunchedEffect` or `DisposableEffect`: real UI code sometimes needs to perform actions, those actions have owners and lifetimes, some should restart, and some require cleanup. The APIs can then be introduced as ways Compose gives those actions predictable behaviour.

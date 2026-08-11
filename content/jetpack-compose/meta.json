@@ -10,7 +10,7 @@
     "what-is-state-hoisting-and-why-is-it-useful",
     "what-is-the-difference-between-a-stateless-and-stateful-composable",
     "how-should-you-observe-viewmodel-state-in-compose",
-    "what-are-the-compose-side-effect-apis-and-when-do-you-use-them",
+    "what-are-side-effects-in-compose-and-how-should-they-be-handled",
     "when-should-data-loading-happen-in-launchedeffect-versus-viewmodel-init",
     "what-is-derivedstateof-and-when-is-it-useful",
     "what-is-snapshotflow",

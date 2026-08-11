@@ -95,6 +95,8 @@ Explain the technical problem and keep the change focused. Preserve the distinct
 
 A strong contribution should normally:
 
+- read like one engineer helping another reason through the problem, especially in production examples;
+- make the decision behind code visible instead of merely describing the API;
 - answer the exact question immediately,
 - use language the candidate can explain under follow-up,
 - include only relevant detail,
@@ -102,9 +104,9 @@ A strong contribution should normally:
 - avoid invented interview-frequency or company claims,
 - and link to deeper questions instead of absorbing them into one page.
 
-## AI-assisted submissions
+## Authorship and review responsibility
 
-AI assistance is allowed, but the contributor remains responsible for every sentence and reference. Do not submit unreviewed bulk-generated content, invented citations, repeated filler, or mass-created question shells.
+Contributors are responsible for every sentence, code sample, and reference they submit. Do not submit material that has not been technically checked and editorially reviewed. Bulk-created question shells, invented citations, repeated filler, and changes that have not been read end to end are not acceptable regardless of how they were produced.
 
 ## Pull requests
 

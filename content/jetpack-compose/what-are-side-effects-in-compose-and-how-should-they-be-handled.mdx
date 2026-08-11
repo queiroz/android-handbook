@@ -1,0 +1,249 @@
+---
+id: "CMP-009"
+title: "What are side effects in Compose and how should they be handled?"
+description: "Understand why real UI work needs controlled lifetimes in Compose, then choose the appropriate effect only after ownership and boundaries are clear."
+difficulty: "advanced"
+track: "core"
+contentType: "interview-question"
+estimatedTime: 7
+answerTime: "~45 sec"
+status: "published"
+tags:
+  - compose
+  - side-effects
+  - lifecycle
+  - coroutines
+  - architecture
+prerequisites:
+  - CMP-002
+  - CMP-003
+  - CMP-008
+related:
+  - CMP-010
+  - CMP-011
+  - CMP-012
+---
+
+<ShortAnswer>
+
+A side effect is **work the UI needs to make happen beyond simply describing what should be on screen** — showing a snackbar, scrolling, sending analytics, registering a listener, or starting some UI-specific asynchronous work.
+
+That matters in Compose because a composable can run again as state changes. Starting that work directly in the composable body can therefore run it more often, or for longer, than intended.
+
+The useful way to handle side effects is to decide **who owns the work, when it should start, when it should run again, when it should stop, and whether anything needs cleanup**. Compose's effect APIs then give that work a lifetime that matches those decisions.
+
+</ShortAnswer>
+
+## What the interviewer is testing
+
+The interviewer is usually testing whether the candidate understands the boundary between **describing the UI** and **making something happen because of the UI**.
+
+That distinction becomes important in Compose because rendering is not a one-time call. A composable can run again, leave the Composition, and later return. Work such as showing a snackbar or registering a listener cannot be treated as though the composable body runs once from top to bottom.
+
+A strong answer therefore starts with the problem, not the API names. It should show that the candidate can reason about **ownership and lifetime**: which layer should perform the work, what starts it, when it should happen again, and when it should stop.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "If the screen needs to do something, put it in a Compose effect."
+
+This is where effects can become a dumping ground for unrelated responsibilities.
+
+A snackbar, a repository call, analytics, navigation, and a listener may all happen around the same screen, but they do not automatically belong to the same layer or share the same lifetime.
+
+For example, loading data that becomes screen state usually has a different owner from briefly showing a snackbar. A listener also has another concern entirely: whoever registers it needs a clear cleanup path.
+
+Architecture helps because it forces the useful question first: **does this work belong to the UI at all?** Once that boundary is clear, the Compose API is usually the easy part.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Compose is designed so that a composable can be called many times. That's what makes recomposition work.
+
+The problem is that not everything an Android screen does can safely happen every time a function is called.
+
+Imagine opening a screen that loads an order from the server. If that request happened on every recomposition, you'd quickly end up doing duplicated work. The same applies to showing a Snackbar, starting a camera preview, registering a `BroadcastReceiver`, or sending analytics events. None of those should happen simply because Compose decided to redraw part of the UI.
+
+This is why Compose introduced effect APIs. They let work happen outside the normal rendering process while still giving that work a lifetime that follows the UI.
+
+Before choosing an effect API, experienced developers usually answer three questions:
+
+- What starts this work?
+- How long should it live?
+- What should stop it?
+
+Once those answers are clear, the appropriate API is usually obvious.
+
+That's the mental model to keep in mind while reading the examples in the next section.
+
+<Remember>
+
+**Compose doesn't make side effects difficult. It makes them explicit. Instead of work happening accidentally during rendering, you decide exactly when that work starts, how long it should live, and when it should stop.**
+
+</Remember>
+
+## Production thinking
+
+Experienced Android developers rarely start by choosing an effect API.
+
+They usually start with a simpler question:
+
+> **Why does this work belong to the screen?**
+
+Imagine this code appears in a pull request:
+
+```kotlin
+LaunchedEffect(Unit) {
+    repository.loadOrders()
+}
+```
+
+The first discussion usually isn't about `LaunchedEffect`. It's about ownership.
+
+Loading orders creates application state. Other screens may need the same data, retries may be required, and the work should survive UI recreation. Those responsibilities normally belong in the ViewModel, not in the screen. Changing the effect API wouldn't fix that architectural mistake.
+
+Now imagine you're reviewing something different:
+
+```kotlin
+LaunchedEffect(uiState.errorMessage) {
+    uiState.errorMessage?.let {
+        snackbarHostState.showSnackbar(it)
+        onMessageShown()
+    }
+}
+```
+
+The first question I would ask in a code review isn't **"Why did you choose `LaunchedEffect`?"**
+
+I'd ask **"Why does showing a Snackbar belong to this screen?"**
+
+In this case it does. A Snackbar is purely UI behaviour. It isn't application state, another screen doesn't care about it, and once the user leaves the screen there's no reason for that work to continue.
+
+Once we've agreed on ownership, `LaunchedEffect` becomes an obvious choice. The message appearing starts the work, and if the screen leaves the composition the coroutine is cancelled automatically. Under the hood that's exactly what `LaunchedEffect` gives you: a coroutine whose lifetime follows the UI.
+
+Notice the final line:
+
+```kotlin
+onMessageShown()
+```
+
+`LaunchedEffect` doesn't solve one-off events. It only runs the coroutine. The ViewModel still needs to know that the message has been handled; otherwise the same message may be shown again after the screen is recreated.
+
+Now consider a button that scrolls a list back to the top:
+
+```kotlin
+val scope = rememberCoroutineScope()
+
+Button(onClick = {
+    scope.launch {
+        listState.animateScrollToItem(0)
+    }
+}) { Text("Top") }
+```
+
+Here the work already has a natural trigger: the user clicked the button. Creating extra state just to trigger a `LaunchedEffect` would make the code harder to understand because the click itself already tells us when the work should start.
+
+`rememberCoroutineScope` fits because the coroutine belongs to that user interaction. If the composable disappears, the scope is cancelled as well.
+
+Another example is a barcode scanner.
+
+Starting the scanner is easy. The difficult part is remembering to stop it. If the user navigates away while the scanner is still running, you've leaked work that no longer belongs to the screen.
+
+```kotlin
+DisposableEffect(scanner) {
+    scanner.start()
+
+    onDispose {
+        scanner.stop()
+    }
+}
+```
+
+`DisposableEffect` exists for exactly this situation. It gives Compose a place to pair setup with cleanup. Choosing another effect here usually means remembering to clean everything up manually, and that's exactly the kind of bug that appears months later.
+
+Analytics is a different kind of work.
+
+Nothing is happening because the user clicked something. We're simply telling another system what the UI currently looks like.
+
+```kotlin
+SideEffect {
+    analytics.setCurrentScreen("Orders")
+}
+```
+
+`SideEffect` runs after Compose has successfully updated the UI, so the analytics system always receives the latest values. Sending analytics before recomposition completes could report stale information instead.
+
+Finally, imagine a timeout:
+
+```kotlin
+val currentOnTimeout by rememberUpdatedState(onTimeout)
+
+LaunchedEffect(Unit) {
+    delay(2_000)
+    currentOnTimeout()
+}
+```
+
+The timeout should always fire after two seconds.
+
+The callback, however, might change while those two seconds are passing. Restarting the timer every time the callback changes would be the real bug because the user could end up waiting forever.
+
+`rememberUpdatedState` solves that specific problem. It keeps the latest callback available without restarting work that's already in progress.
+
+Experienced engineers usually ask the same questions before reaching for any effect API:
+
+- Who owns this work?
+- Why does it belong here?
+- When should it start?
+- When should it run again?
+- When should it stop?
+- What bug would another approach introduce?
+
+Once those questions have clear answers, the appropriate Compose effect API is usually obvious.
+
+## Follow-up questions
+
+<FollowUp>
+
+- [How should you observe ViewModel state in Compose?](/android/handbook/jetpack-compose/how-should-you-observe-viewmodel-state-in-compose)
+- [What is recomposition and what triggers it?](/android/handbook/jetpack-compose/what-is-recomposition-and-what-triggers-it)
+
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains the problem before naming effect APIs.
+- Separates UI behaviour from work that belongs to a state holder or another application layer.
+- Chooses triggers and keys based on when existing work should genuinely be replaced.
+- Treats registration and cleanup as one ownership decision.
+- Understands that a composable's lifetime is not the same as "run once."
+- Knows that several effects on one screen can be perfectly reasonable when they represent different UI lifetimes.
+
+</SeniorAnswer>
+
+## Key takeaways
+
+<KeyTakeaways>
+
+- Side effects are actions the UI needs to perform beyond describing what should be rendered.
+- A composable can run again, so side-effect work needs an explicit lifetime instead of living directly in the composable body.
+- Decide ownership, when the work should start or run again, when it should stop, and cleanup before choosing an effect API.
+- Architecture helps keep business work from leaking into Compose simply because an effect can execute it.
+- Compose's different effect APIs exist because different kinds of UI work have different lifetimes.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Side-effects in Compose — Android Developers](https://developer.android.com/develop/ui/compose/side-effects)
+- [Lifecycle of composables — Android Developers](https://developer.android.com/develop/ui/compose/lifecycle)
+- [Thinking in Compose — Android Developers](https://developer.android.com/develop/ui/compose/mental-model)
+- [Recommendations for Android architecture — Android Developers](https://developer.android.com/topic/architecture/recommendations)
+
+</ReferenceList>

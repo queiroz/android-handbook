@@ -54,7 +54,7 @@ Write like an experienced senior engineer mentoring another developer.
 - Brief before deep
 - Clear about ownership, lifecycle, boundaries, failure modes, and trade-offs
 - Honest about version differences and uncertainty
-- Free of generated-sounding filler, artificial drama, and unsupported seniority claims
+- Free of filler, artificial drama, canned phrasing, and unsupported seniority claims
 
 A useful test is:
 
@@ -174,6 +174,14 @@ Before publishing, ask:
 
 If the answer is no, the page probably explains the mechanism but not the underlying engineering concept.
 
+For problem-first questions, also use the **API removal test** while drafting:
+
+> If the API names disappeared from the explanation, would the reader still understand the problem, the ownership boundary, and the decision being made?
+
+The answer should be yes before implementation details are introduced. This prevents API-shaped interview questions from turning into API catalogues.
+
+The hidden engineering question should shape the explanation, but the visible title must still be a realistic interview question. Prefer wording that lets a candidate explain reasoning before listing mechanisms.
+
 ## The 80/20 scope rule
 
 Include the small amount of knowledge needed to answer the question confidently and reason about it in production. Move the remaining detail into follow-up questions, deep dives, or official references.
@@ -222,7 +230,9 @@ A useful sample should:
 - be small enough to discuss aloud;
 - omit unrelated setup and boilerplate;
 - model a production-worthy decision rather than a toy trick; and
-- be followed by a brief explanation of what the reader should notice.
+- be followed by the reasoning a reviewer would care about, not a line-by-line description of the API.
+
+When code represents a real production decision, explain it as if reviewing the change with another engineer. The useful question is rarely only *what does this API do?* It is usually *why does this work belong here, why is this mechanism a good fit, and what bug or maintenance problem would another choice create?*
 
 Typical guidance:
 
@@ -253,6 +263,36 @@ Examples include:
 - leaking state ownership across architecture layers.
 
 Explain the failure and the decision that prevents it. Keep unrelated edge cases in follow-up pages.
+
+### Production thinking should feel like collaborative engineering
+
+Production Thinking is not the place to restate API documentation. It should show the reader how engineers reason through a real change together.
+
+When a realistic example is useful, write it the way a good teammate would discuss the change during pair programming or review: start with what the application is trying to do, establish the boundary and consequences, then let the implementation follow from that reasoning.
+
+A strong example should naturally answer three questions:
+
+1. **Why does this work belong here?** — establish ownership and the boundary responsible for the work.
+2. **Why is this approach appropriate?** — connect the mechanism to the required lifetime, trigger, cleanup, state, or failure behaviour.
+3. **What would go wrong with a different approach?** — name the duplicate work, leak, stale value, incorrect lifetime, hidden coupling, or other production consequence the decision avoids.
+
+Do not force those questions into visible labels on every page. Use them as a review test while drafting. The finished prose should feel like one engineer walking another through the decision:
+
+> Before choosing the API, ask why this work belongs to the screen. Once ownership and lifetime are clear, the API choice usually becomes much easier to explain.
+
+Prefer this style:
+
+> The listener belongs to this screen, but only while the screen is present. The important part is not registering it; it is guaranteeing that it is removed when the UI goes away. This mechanism gives us both setup and cleanup at the same boundary, so the listener cannot quietly outlive the screen.
+
+Over this style:
+
+> This API registers a listener and invokes cleanup when the composable leaves Composition.
+
+The second sentence may be technically correct, but it teaches the mechanism. The first teaches ownership, lifetime, and the failure the API prevents.
+
+For unfamiliar APIs, one short sentence about the relevant behaviour is enough when the reader needs it to understand the decision. Junior and returning engineers should understand *why the code works*; experienced readers should not have to read a miniature reference manual.
+
+The goal is not to make every Production Thinking section longer. Use as many real examples as the interview question genuinely needs, and make each example earn its place by teaching a distinct decision.
 
 ## What separates a senior answer
 
@@ -313,6 +353,8 @@ Before considering a page complete, verify:
 - The reader understands why the concept or decision exists.
 - The explanation goes only one useful level deeper.
 - The page teaches production judgement without becoming documentation.
+- Real-world examples explain ownership, why the chosen approach fits, and what failure it prevents.
+- Production Thinking reads like collaborative engineering discussion, not an API walkthrough.
 - Code exists only if it materially improves understanding.
 - The Remember callout does not duplicate nearby prose.
 - Follow-ups link to existing pages.
@@ -324,3 +366,31 @@ Before considering a page complete, verify:
 ### Answer the interview question, not the subject
 
 Every page answers a single interview question, not an entire technology. Resist turning a question into a mini-guide for the framework. The interview-ready answer should answer the interviewer's question first; deeper concepts belong later on the page or in follow-up questions.
+
+
+## Prefer concrete problems over technical vocabulary
+
+Prefer describing what the application is trying to do before introducing framework terminology.
+
+Instead of abstract phrases like "imperative work", use concrete examples:
+
+- show a Snackbar
+- navigate to another screen
+- register a listener
+- start a coroutine
+- send analytics
+
+Once the reader understands the problem, introduce the technical term only if it genuinely improves understanding.
+
+## Writing order
+
+For every handbook page:
+
+1. Find the hidden engineering question.
+2. Explain the real production problem.
+3. Build the mental model.
+4. Answer the interview question.
+5. Discuss production thinking and trade-offs.
+6. Introduce APIs and implementation details as practical solutions.
+
+Readers should understand *why* before learning *how*.
