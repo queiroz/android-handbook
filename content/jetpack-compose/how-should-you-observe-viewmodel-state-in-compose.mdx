@@ -1,47 +1,220 @@
 ---
 id: "CMP-008"
 title: "How should you observe ViewModel state in Compose?"
-description: "How should you observe ViewModel state in Compose."
+description: "Observe screen state with lifecycle awareness without coupling the rest of the UI to the ViewModel."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
+answerTime: "~30 sec"
+status: "published"
 tags:
+  - compose
   - viewmodel
   - stateflow
-prerequisites: []
-related: []
+  - lifecycle
+prerequisites:
+  - CMP-006
+  - CMP-007
+related:
+  - CMP-004
+  - CMP-006
+  - CMP-007
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+If a `ViewModel` exposes screen state as a `StateFlow`, I normally collect it from the screen-level composable with `collectAsStateWithLifecycle()`.
 
-## Short interview answer
+That gives Compose the latest state while respecting the Android lifecycle. From there, I pass the current state and callbacks into the UI instead of passing the `ViewModel` through the composable tree.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+The `ViewModel` is still the source of truth. Compose is just observing that state and rendering it.
 
-## Explanation
+**So the useful boundary is: observe the ViewModel near the screen, then pass state and actions through the UI.**
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+This can sound like an API question, but remembering `collectAsStateWithLifecycle()` is only the surface of it.
 
-## Common mistakes
+The interviewer is really looking for whether you understand **ownership, lifecycle, and the boundary between screen logic and rendering**.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer keeps the `ViewModel` as the screen-level state holder, observes it in a lifecycle-aware way, and avoids making every child composable depend on that state holder directly.
+
+The important distinction is that **observing state does not make the UI its owner**.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "I pass the ViewModel into every composable that needs something from it."
+
+That works, but it spreads a screen-level dependency through the UI tree.
+
+A row, button, card, or content composable usually doesn't need to know whether its data came from a `ViewModel`, a preview, a test, or some other state holder. It only needs the values it renders and the actions it can report back.
+
+Passing the whole `ViewModel` everywhere makes those components more coupled than they need to be and makes reuse, previews, and focused testing harder.
+
+The better default is to **observe near the screen boundary, then pass each composable the state and callbacks it actually needs**.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine an order screen whose `ViewModel` owns the current UI state:
+
+```kotlin
+class OrderViewModel : ViewModel() {
+    val uiState: StateFlow<OrderUiState> = ...
+
+    fun retry() {
+        // Retry loading the order.
+    }
+}
+```
+
+The screen-level composable can connect that state holder to Compose:
+
+```kotlin
+@Composable
+fun OrderRoute(
+    viewModel: OrderViewModel = viewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    OrderScreen(
+        state = uiState,
+        onRetry = viewModel::retry,
+    )
+}
+```
+
+`OrderRoute` knows about the `ViewModel` because that is where screen-level state meets the UI.
+
+The rendering composable doesn't need that dependency:
+
+```kotlin
+@Composable
+fun OrderScreen(
+    state: OrderUiState,
+    onRetry: () -> Unit,
+) {
+    when (state) {
+        OrderUiState.Loading -> LoadingContent()
+        is OrderUiState.Content -> OrderContent(state.order)
+        is OrderUiState.Error -> ErrorContent(
+            message = state.message,
+            onRetry = onRetry,
+        )
+    }
+}
+```
+
+Now the responsibilities are clear:
+
+- the `ViewModel` owns and produces the screen state;
+- the screen-level composable observes that state;
+- the UI below renders the current value;
+- user actions travel back toward the owner that can decide what should change.
+
+`collectAsStateWithLifecycle()` matters because an Android screen has a lifecycle outside Compose itself. When the UI is no longer in an active lifecycle state, it generally doesn't need to keep collecting updates just because the `ViewModel` is still alive.
+
+<Remember>
+
+**The ViewModel owns the screen state. Compose observes it with the lifecycle, then the UI renders it.**
+
+</Remember>
+
+That also connects back to state hoisting. Moving state into a `ViewModel` changes **who owns it**. Calling `collectAsStateWithLifecycle()` does not move ownership again; it simply gives Compose the current value so the UI can react to changes.
+
+There is also a reason the recommendation is specifically lifecycle-aware on Android. `collectAsState()` is still useful in platform-agnostic Compose code, but Android UI has a lifecycle that should usually be part of the observation decision.
+
+## Production thinking
+
+The boundary becomes much more valuable as a screen grows.
+
+Imagine a checkout screen where the address section, payment selector, order summary, error banner, and confirmation button all receive the same `ViewModel` and reach into it whenever they need something.
+
+At first that can feel convenient. Over time, those components become tied to one screen-level state holder. Reusing one in another screen becomes awkward, previews need more setup, and it becomes harder to tell which parts of the `ViewModel` each component actually depends on.
+
+I prefer to keep the architecture dependency near the screen boundary and let the UI below work with ordinary values and actions:
+
+```text
+ViewModel
+    ↓
+lifecycle-aware observation
+    ↓
+screen state
+    ↓
+UI composables
+    ↑
+user actions
+```
+
+A single `uiState` is a useful default when several values together describe one coherent screen. It gives the UI one snapshot to render and keeps related state changes easy to reason about. But it is not a rule. If parts of a screen are genuinely unrelated and change independently, separate state streams can be clearer than forcing everything into one large object.
+
+I also wouldn't split state just because I'm worried that changing one field will "recompose the whole screen." If `uiState` changes, the composable that read it can be scheduled for recomposition, but Compose can skip child composables whose inputs have not changed when they are eligible to be skipped.
+
+That is another reason to keep child dependencies focused. If a header only needs an `Order`, pass the `Order` rather than the entire `OrderUiState`. The API becomes clearer, and a change to something unrelated such as `isSubmitting` does not change the value that header receives.
+
+The goal is not to chase the fewest possible recompositions. Recomposition is normal Compose behaviour. The goal is to model state coherently, keep dependencies narrow, and give the UI meaningful boundaries where unchanged work can stay unchanged.
+
+That doesn't mean there must be exactly one collection call at the top of every screen, or that every project must use a composable named `Route`. Those are implementation details.
+
+The durable rule is to keep the dependency intentional: **screen-level components can know about screen-level state holders; reusable rendering components usually shouldn't need to**.
+
+Lifecycle-aware collection also matters beyond correctness. If the UI stops collecting while it is inactive, upstream reactive work can also be designed to stop when nobody is consuming it instead of continuing unnecessarily in the background.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is state hoisting and why is it useful?](/android/handbook/jetpack-compose/what-is-state-hoisting-and-why-is-it-useful)
+- [What is the difference between a stateless and stateful composable?](/android/handbook/jetpack-compose/what-is-the-difference-between-a-stateless-and-stateful-composable)
+- [What is the difference between `remember` and `rememberSaveable`?](/android/handbook/jetpack-compose/what-is-the-difference-between-remember-and-remembersaveable)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Treats observing ViewModel state as an **architecture boundary**, not just a Flow API call.
+- Keeps the `ViewModel` as the source of truth while recognising that Compose only needs to observe and render the current state.
+- Uses lifecycle-aware collection for Android UI instead of ignoring the screen lifecycle.
+- Knows that `collectAsState()` is not inherently wrong; lifecycle-aware collection is the better Android default, while plain collection still has valid platform-agnostic uses.
+- Keeps screen-level state holders near screen-level composables instead of passing them through reusable presentation components by default.
+- Passes focused state and actions to child composables so their dependencies remain clear.
+- Knows that one screen-level `uiState` is a useful default for related state, not a rule for unrelated streams.
+- Understands that changing one field in a screen state does not mean every child composable must redo its work; recomposition follows state reads and Compose can skip unchanged child work when appropriate.
+- Understands that state ownership and state observation are separate decisions.
+- Stops before turning the answer into a catalogue of `StateFlow`, `SharedFlow`, `LaunchedEffect`, or every possible observation API.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- A `ViewModel` can own and expose screen-level UI state.
+- On Android, `collectAsStateWithLifecycle()` is the usual way to collect Flow-backed state from Compose with lifecycle awareness.
+- Observing state in Compose does not transfer ownership away from the `ViewModel`.
+- Keep ViewModel access near the screen boundary and pass focused state and actions through the UI.
+- One coherent screen state is a useful default, but unrelated state does not need to be forced into one object.
+- Reusable composables usually should not depend directly on a screen-level `ViewModel`.
+- `collectAsState()` still has valid uses outside Android lifecycle-aware UI.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [State hoisting in Compose — Android Developers](https://developer.android.com/develop/ui/compose/state-hoisting)
+- [Recommendations for Android architecture — Android Developers](https://developer.android.com/topic/architecture/recommendations)
+- [Use Kotlin coroutines with lifecycle-aware components — Android Developers](https://developer.android.com/topic/libraries/architecture/coroutines)
+- [Lifecycle of composables — Android Developers](https://developer.android.com/develop/ui/compose/lifecycle)
+
+</ReferenceList>
