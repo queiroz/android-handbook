@@ -12,6 +12,8 @@ Every interview question has one stable ID, one readable slug, and one MDX file.
 
 Category `index.mdx` files must not maintain a manual `## Questions` list. The site generates that list from interview-question pages in the same section whose frontmatter is `status: published`, ordered by question ID. Publishing a new question therefore updates its section page automatically.
 
+The handbook landing page must not maintain a manual Question groups link list. Keep the `## Question groups` heading in `handbook/content/index.mdx` and render `<PublishedQuestionGroups />` beneath it. The component derives the links from published section landing pages that contain at least one `status: published` interview question, using the handbook section order from `handbook/content/meta.json`. Publishing the first question in a section therefore makes that question group eligible to appear automatically.
+
 A contributor should be able to add or improve one question in a small, reviewable pull request.
 
 ## Frontmatter
