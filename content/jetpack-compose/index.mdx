@@ -1,7 +1,15 @@
 ---
 title: "Jetpack Compose"
-description: "Interview questions covering jetpack compose."
-status: "draft"
+description: "Build the mental model behind declarative UI, Composition, recomposition, and state-driven interfaces in Android."
+status: "published"
 ---
 
-Prepare the questions in this section in interview order. Start with the core questions, then use advanced questions to test deeper engineering judgement.
+Jetpack Compose changes how Android UI is expressed, but the important shift is not Kotlin instead of XML. It is learning to describe the screen from state and letting Compose keep the rendered UI synchronized as that state changes.
+
+The goal is not to memorise Compose APIs or chase recomposition rules. It is to understand **how declarative UI changes responsibility, what Compose remembers between executions, how state drives UI updates, and how state lifetime affects the way a screen is designed**.
+
+## What this section builds
+
+The questions are arranged so later concepts build on earlier ones. Together they develop a mental model of declarative UI, Composition, recomposition, state, and UI-state lifetime before moving into ownership, hoisting, state holders, side effects, navigation, and performance.
+
+Start with the interview-ready answer, then go deeper only where you need more context. By the end of this section, you should be able to explain not only how Compose updates a screen, but also the engineering reasoning behind where state lives, how long it should survive, and how those decisions affect production UI code.
