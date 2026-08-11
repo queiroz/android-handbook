@@ -1,46 +1,189 @@
 ---
 id: "CMP-006"
 title: "What is state hoisting and why is it useful?"
-description: "What is state hoisting and why is it useful."
+description: "Understand state hoisting as an ownership decision, not just a Compose pattern."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
+answerTime: "~30 sec"
+status: "published"
 tags:
   - state-hoisting
-prerequisites: []
-related: []
+  - state
+  - unidirectional-data-flow
+  - state-ownership
+prerequisites:
+  - CMP-004
+  - CMP-005
+related:
+  - CMP-007
+  - CMP-008
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+State hoisting means **moving ownership of state out of a composable when something higher up needs to control or coordinate it**.
 
-## Short interview answer
+Instead of the child keeping its own mutable state, it receives the current value and reports user actions back to whoever owns it. That gives you one source of truth and makes the composable easier to reuse, test, and coordinate with the rest of the UI.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+But I wouldn't hoist everything. If state is genuinely private to one composable, keeping it local is often the better design.
 
-## Explanation
+The real question is **who needs to own this state?**
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+This sounds like a Compose pattern question, but the useful part is whether you understand **state ownership**.
 
-## Common mistakes
+An interviewer is usually trying to see whether you know who should own a piece of state. Sometimes it belongs inside the composable; sometimes it needs to move higher so the rest of the UI can coordinate around it. That decision affects whether there is one source of truth and how reusable the child composable remains.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer doesn't just repeat "state goes down, events go up." It explains **why the state had to move in the first place**.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "Reusable composables should be stateless, so I hoist all state to the ViewModel."
+
+That's too broad.
+
+A composable displaying a value doesn't automatically mean it should own that value, but the opposite is also true: not every toggle, expanded row, animation flag, or temporary interaction belongs at screen level.
+
+If nobody outside the composable needs to read, change, or coordinate that state, keeping it local can be perfectly reasonable.
+
+The better question is **who needs control of this state?** Hoist it only as far as that responsibility requires.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a product screen with a search field and a list of matching products.
+
+It can be tempting to let the search field own its text because that's where the text is displayed:
+
+```kotlin
+@Composable
+fun SearchField() {
+    var query by remember { mutableStateOf("") }
+
+    TextField(
+        value = query,
+        onValueChange = { query = it },
+    )
+}
+```
+
+That works while the search field is the only thing that cares about `query`.
+
+But now the product list needs the same value to decide what to show. If `SearchField` keeps ownership, the rest of the screen has no clean way to coordinate around that state.
+
+So move ownership to the closest place that needs to coordinate both pieces:
+
+```kotlin
+@Composable
+fun ProductScreen() {
+    var query by rememberSaveable { mutableStateOf("") }
+
+    Column {
+        SearchField(
+            query = query,
+            onQueryChange = { query = it },
+        )
+
+        ProductList(query = query)
+    }
+}
+
+@Composable
+fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+    )
+}
+```
+
+Now `ProductScreen` owns the query.
+
+`SearchField` displays the current value and reports what the user did. `ProductList` can use that same value. There isn't a second copy to keep synchronized.
+
+This is where the familiar Compose pattern comes from:
+
+- **state flows down** to the composables that need it;
+- **events flow up** to the owner that decides what should change.
+
+The important part isn't the direction of the arrows. It's that there is a clear owner making the decision.
+
+<Remember>
+
+**Hoist state when responsibility needs to move higher, not simply because state exists.**
+
+</Remember>
+
+That also explains why the "lowest common ancestor" is a useful rule of thumb. If two siblings need the same state, their parent may be the right owner. There is no reason to push it all the way to a screen-level state holder unless the responsibility actually belongs there.
+
+## Production thinking
+
+State often starts local and moves upward as a screen gains responsibilities.
+
+A search query might initially affect only a text field. Later it drives filtering, loading, empty states, analytics, or other parts of the screen. At that point the field is no longer the right owner because the decision has become bigger than the field itself.
+
+In production code, I would keep state as close as possible to where it is used, then move it upward when another part of the UI needs to **read it, change it, or make decisions from it**.
+
+That might mean a parent composable owns simple UI state shared by a few children. If the state is part of screen logic or business rules, a screen-level state holder such as a `ViewModel` may be the better owner.
+
+The important distinction is that state hoisting does not mean "put state in a ViewModel." It means **move ownership to the appropriate owner**.
+
+That keeps composable APIs easier to reason about and avoids a common production problem: multiple pieces of mutable state representing the same thing and slowly drifting out of sync.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is the difference between a stateless and stateful composable?](/android/handbook/jetpack-compose/what-is-the-difference-between-a-stateless-and-stateful-composable)
+- [How should you observe ViewModel state in Compose?](/android/handbook/jetpack-compose/how-should-you-observe-viewmodel-state-in-compose)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Treats state hoisting as an **ownership decision**, not a mechanical Compose recipe.
+- Explains why a child should stop owning state when other parts of the UI need to coordinate around it.
+- Understands that one source of truth is valuable because there is no duplicated mutable state to synchronize.
+- Uses state-down/events-up as a consequence of clear ownership rather than as a slogan to memorise.
+- Hoists state to the closest owner that needs it instead of automatically pushing everything to a `ViewModel`.
+- Keeps genuinely local UI state local when nothing outside the composable needs control of it.
+- Recognises that a `ViewModel` becomes relevant when ownership belongs at the screen or business-logic level, not merely because it survives configuration changes.
+- Can design a composable API around values and events without turning every event into a generic `onEvent` abstraction unnecessarily.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- State hoisting is primarily about **who owns mutable state**.
+- Move state upward when something outside the composable needs to read, change, or coordinate it.
+- Hoisted composables commonly receive state and expose events back to the owner.
+- Clear ownership gives the UI one source of truth and makes coordination easier.
+- Hoist state only as far as responsibility requires; genuinely local UI state can stay local.
+- A `ViewModel` is one possible owner, not the definition of state hoisting.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [State hoisting in Compose — Android Developers](https://developer.android.com/develop/ui/compose/state-hoisting)
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Architecture recommendations — Android Developers](https://developer.android.com/topic/architecture/recommendations)
+
+</ReferenceList>
