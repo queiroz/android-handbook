@@ -1,47 +1,174 @@
 ---
 id: "CMP-005"
 title: "What is the difference between remember and rememberSaveable?"
-description: "What is the difference between remember and rememberSaveable."
+description: "Understand how state lifetime changes when UI must survive recomposition or recreation."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
+answerTime: "~30 sec"
+status: "published"
 tags:
   - remember
   - remember-saveable
-prerequisites: []
-related: []
+  - state-lifetime
+prerequisites:
+  - CMP-004
+related:
+  - CMP-006
+  - CMP-007
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+The difference isn't **what** the state is. It's **how long you need it to survive**.
 
-## Short interview answer
+Use `remember` when UI state only needs to survive recomposition.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+Use `rememberSaveable` when that same UI state should also survive Activity recreation, such as a configuration change.
 
-## Explanation
+Choose the lifetime first. The API follows from that decision.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+This sounds like a question about two Compose APIs, but the interviewer is really testing whether you understand **state lifetime**.
 
-## Common mistakes
+The interviewer isn't comparing APIs. They're looking for whether you think about **how long a piece of UI state should exist** before you choose an API.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer separates recomposition from recreation. They're different lifecycle boundaries, so state may need a different lifetime at each one.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "`rememberSaveable` is basically a safer `remember`, so I use it everywhere."
+
+That's the wrong decision model.
+
+`rememberSaveable` exists for UI state that is worth restoring after recreation. That does not mean every value belongs there.
+
+A temporary animation flag may only matter while the current Composition exists. A search query the user has already typed may be worth restoring after rotation. Large objects, repositories, and business state should not be pushed into `rememberSaveable` just to make them survive longer.
+
+The interviewer isn't asking which API preserves more. It's asking **what lifetime this state actually needs**.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a checkout screen.
+
+The user is halfway through typing their delivery address.
+
+If another part of the screen recomposes, should the address disappear?
+
+Of course not.
+
+While they are typing, other state on the screen may change and Compose may re-run the search field. Losing the text on every recomposition would make the UI unusable.
+
+That's the lifetime `remember` handles:
+
+```kotlin
+@Composable
+fun ProductSearch() {
+    var query by remember { mutableStateOf("") }
+
+    SearchField(
+        value = query,
+        onValueChange = { query = it },
+    )
+}
+```
+
+The composable can run again and `query` still belongs to the same place in the Composition.
+
+Now change the boundary instead of the API.
+
+The user rotates the device. The Activity is recreated, so the old Composition is gone. If that search text should still be there afterwards, the requirement is no longer just "survive recomposition."
+
+If that UI state should come back after recreation, that's where `rememberSaveable` fits:
+
+```kotlin
+@Composable
+fun ProductSearch() {
+    var query by rememberSaveable { mutableStateOf("") }
+
+    SearchField(
+        value = query,
+        onValueChange = { query = it },
+    )
+}
+```
+
+Same state. Different lifetime requirement.
+
+<Remember>
+
+**`remember` keeps UI state across recomposition. `rememberSaveable` is for UI state that should also come back after recreation.**
+
+</Remember>
+
+The next question is different again: if multiple composables need the same state, should one composable own it at all?
+
+## Production thinking
+
+Production screens rarely have one lifetime for every piece of UI state.
+
+A checkout screen might have an expanded delivery section, a selected tab, temporary form input, and a confirmation dialog. Those values do not all need the same lifetime.
+
+Not every piece of UI state needs the same lifetime. Some can disappear with the Composition, some should come back after recreation, and some shouldn't be owned by the composable at all.
+
+In production, I would make the lifetime decision before choosing the API:
+
+- Does the value only need to survive recomposition?
+- Should the user get it back after the Activity is recreated?
+- Is this actually screen or business state that belongs to another owner?
+
+That last question is where state hoisting and screen-level state holders come in. `remember` and `rememberSaveable` solve **UI state lifetime**; they do not decide application architecture.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is state hoisting and why is it useful?](/android/handbook/jetpack-compose/what-is-state-hoisting-and-why-is-it-useful)
+- [What is the difference between a stateless and stateful composable?](/android/handbook/jetpack-compose/what-is-the-difference-between-a-stateless-and-stateful-composable)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Starts with **state lifetime** rather than API syntax.
+- Clearly separates recomposition from Activity or process recreation.
+- Uses `remember` when UI-owned state only needs to stay with the current Composition.
+- Uses `rememberSaveable` when small, saveable UI state should be restored after recreation.
+- Doesn't treat `rememberSaveable` as a universally better version of `remember`.
+- Doesn't use either API as a substitute for proper ownership of screen or business state.
+- Recognises that lifetime and ownership are separate decisions: first ask how long the value should live, then ask who should own it.
+- Stops before turning the answer into a catalogue of `Saver`, `SaveableStateRegistry`, or Bundle internals unless the interviewer asks.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- The real difference is **state lifetime**.
+- `remember` keeps UI state across recomposition.
+- `rememberSaveable` can restore supported UI state after recreation.
+- Choose the lifetime first; choose the API second.
+- `remember` and `rememberSaveable` manage UI state lifetime, not application state ownership.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Save UI state in Compose — Android Developers](https://developer.android.com/develop/ui/compose/state-saving)
+- [State hoisting in Compose — Android Developers](https://developer.android.com/develop/ui/compose/state-hoisting)
+
+</ReferenceList>

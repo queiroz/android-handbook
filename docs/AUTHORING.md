@@ -10,6 +10,8 @@ Use only one reader-visible page title. Repeating the title in the body creates 
 
 Every interview question has one stable ID, one readable slug, and one MDX file. Category introductions use `index.mdx` and do not need question IDs.
 
+Category `index.mdx` files must not maintain a manual `## Questions` list. The site generates that list from interview-question pages in the same section whose frontmatter is `status: published`, ordered by question ID. Publishing a new question therefore updates its section page automatically.
+
 A contributor should be able to add or improve one question in a small, reviewable pull request.
 
 ## Frontmatter
@@ -62,7 +64,7 @@ Use `templates/question-template.mdx` as the starting point. The default shape i
 - Common interview mistake when useful
 - If they ask you to elaborate
 - Optional code example with a brief explanation when useful
-- Follow-up questions linked only to existing handbook pages
+- Follow-up questions linked to existing handbook pages; draft/review destinations are automatically hidden until published
 - Remember statement when one sentence captures the mental model
 - What separates a senior answer when meaningful
 - Key takeaways
@@ -81,7 +83,7 @@ The initial foundation contains draft placeholder files with HTML authoring comm
 3. Research authoritative technical sources.
 4. Write the short answer first.
 5. Add only enough explanation and code to support that answer.
-6. Add a short set of realistic follow-ups that already have handbook pages, and link them directly.
+6. Add a short set of realistic follow-ups that already have handbook pages, and link them directly. Draft/review targets will stay hidden until published.
 7. Run validation and inspect the rendered page.
 8. Submit one focused question or tightly related correction per pull request when practical.
 

@@ -111,6 +111,15 @@ lifecycleScope.launch {
 
 This code reads from top to bottom, but `loadProfile()` can suspend while waiting for I/O. During that time, the thread is free to run other coroutines instead of sitting idle.
 
+## Follow-up questions
+
+<FollowUp>
+
+- [What is the difference between suspending and blocking?](/android/handbook/coroutines-flow/what-is-the-difference-between-suspending-and-blocking)
+- [What is the difference between launch and async?](/android/handbook/coroutines-flow/what-is-the-difference-between-launch-and-async)
+
+</FollowUp>
+
 ## What separates a senior answer
 
 <SeniorAnswer>
