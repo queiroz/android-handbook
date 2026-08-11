@@ -1,7 +1,15 @@
 ---
 title: "Coroutines and Flow"
-description: "Interview questions covering coroutines and flow."
-status: "draft"
+description: "Build the mental model behind structured concurrency, asynchronous work, and reactive data streams in Android."
+status: "published"
 ---
 
-Prepare the questions in this section in interview order. Start with the core questions, then use advanced questions to test deeper engineering judgement.
+Coroutines and Flow are fundamental to modern Android development. They shape how applications perform asynchronous work, coordinate concurrency, and expose changing data without blocking threads.
+
+The goal is not to memorise coroutine builders or Flow operators. It is to understand why these abstractions exist, what problems they solve, and how they help you build applications that remain responsive, predictable, and easier to reason about.
+
+## What this section builds
+
+The questions are arranged so later concepts build on earlier ones. Together they develop a mental model of structured concurrency, suspension, cancellation, coroutine scope, and reactive streams before exploring the APIs that implement those ideas.
+
+Start with the interview-ready answer, then go deeper only where you need more context. By the end of this section, you should be able to explain not only how Coroutines and Flow work, but also why particular patterns are preferred in production Android applications.
