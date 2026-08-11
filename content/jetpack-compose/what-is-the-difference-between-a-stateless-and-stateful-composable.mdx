@@ -1,46 +1,195 @@
 ---
 id: "CMP-007"
 title: "What is the difference between a stateless and stateful composable?"
-description: "What is the difference between a stateless and stateful composable."
+description: "Compare stateless and stateful composables by who owns the changing state."
 difficulty: "foundational"
 track: "core"
 contentType: "interview-question"
 estimatedTime: 6
-status: "draft"
+answerTime: "~30 sec"
+status: "published"
 tags:
+  - compose
   - state
-prerequisites: []
-related: []
+  - state-ownership
+  - composable-api-design
+prerequisites:
+  - CMP-006
+related:
+  - CMP-004
+  - CMP-005
+  - CMP-006
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+Sometimes a composable can manage its own behaviour because nobody else needs to control it. Other times the caller needs to decide what that composable should display or how it should behave.
 
-## Short interview answer
+That's the difference between a stateful and stateless composable. A **stateful composable owns some of the changing state it uses**, while a **stateless composable receives that state from its caller**.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+Stateless composables are useful when the caller needs control because the same UI can be driven by different owners. But that doesn't mean stateful composables are bad. If a piece of UI state is genuinely private to the component, keeping it inside can make the API simpler.
 
-## Explanation
+**The important distinction is ownership, not whether the UI changes.**
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+This question is less about recognising two Compose labels and more about **component responsibility**.
 
-## Common mistakes
+An interviewer is usually trying to see whether you understand what changes when a composable owns mutable state itself versus leaving that decision to its caller. That affects how easy the component is to control, reuse, test, and coordinate with the rest of the UI.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer also avoids turning "stateless" into a rule. The useful judgement is knowing **when outside code needs control and when local ownership is perfectly reasonable**.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "Stateless composables are always better, so reusable components shouldn't keep any state."
+
+That's too absolute.
+
+Some state is genuinely part of a component's local UI behaviour: whether a small section is expanded, whether an animation is running, or some other interaction that nothing outside needs to control.
+
+Pushing that state upward just to make the composable "stateless" can make the caller responsible for details it doesn't care about.
+
+The opposite mistake is just as limiting: hiding state inside a composable when the caller needs to coordinate or control it.
+
+The better question is **who needs control of this behaviour?**
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine an expandable card whose expanded state is completely private to the card.
+
+A stateful version can own that behaviour itself:
+
+```kotlin
+@Composable
+fun ExpandableCard() {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    Card {
+        Header(
+            expanded = expanded,
+            onClick = { expanded = !expanded },
+        )
+
+        if (expanded) {
+            Details()
+        }
+    }
+}
+```
+
+That API is convenient. The caller asks for an `ExpandableCard` and doesn't need to know how its expanded state is managed.
+
+But imagine another screen needs to expand the card from somewhere else, keep several cards coordinated, or decide the value from screen state. Now hiding `expanded` inside the card gets in the way.
+
+The stateless version leaves that decision to the caller:
+
+```kotlin
+@Composable
+fun ExpandableCard(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+) {
+    Card {
+        Header(
+            expanded = expanded,
+            onClick = { onExpandedChange(!expanded) },
+        )
+
+        if (expanded) {
+            Details()
+        }
+    }
+}
+```
+
+This composable can still change visually whenever `expanded` changes. It is stateless because **it doesn't own that changing value**.
+
+That distinction matters. Stateless does not mean static or unchanging; it means the state comes from somewhere else.
+
+<Remember>
+
+**Stateless doesn't mean unchanging. It means the composable doesn't own the state that is changing.**
+
+</Remember>
+
+There is also no reason you must choose only one API.
+
+A reusable component can expose the stateless version for callers that need control and provide a stateful wrapper for callers that just want the convenient behaviour:
+
+```kotlin
+@Composable
+fun ExpandableCard() {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    ExpandableCard(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    )
+}
+```
+
+Now the stateless composable is the controllable core, while the stateful version provides a convenient default.
+
+## Production thinking
+
+In production code, I wouldn't try to make every composable stateless. I would decide **how much control the caller actually needs**.
+
+A design-system component is a good example. A caller may initially be happy for a component to manage its own small interaction state. Later another screen may need to drive that same value from screen state, synchronize several components, restore it differently, or react to the change elsewhere.
+
+If the component exposes a stateless API, that control is available without duplicating the component's UI logic. A stateful wrapper can still keep the simple case simple.
+
+This is why stateless and stateful are not competing architectures. They are two API shapes with different ownership boundaries.
+
+The important part is to keep that boundary intentional. Don't push private implementation details onto callers for purity, and don't hide state that the rest of the UI genuinely needs to control.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is state hoisting and why is it useful?](/android/handbook/jetpack-compose/what-is-state-hoisting-and-why-is-it-useful)
+- [What is the difference between `remember` and `rememberSaveable`?](/android/handbook/jetpack-compose/what-is-the-difference-between-remember-and-remembersaveable)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Defines the difference through **state ownership**, not whether the UI can change.
+- Understands that a stateless composable can still render changing state supplied by its caller.
+- Explains why stateless APIs give callers more control without claiming that every composable should be stateless.
+- Keeps genuinely private UI state local when exposing it would only leak implementation detail.
+- Recognises when caller control, coordination, reuse, or testing makes a stateless API valuable.
+- Can provide a stateless core with a stateful convenience wrapper when both use cases matter.
+- Connects the design back to clear ownership rather than mechanically moving every piece of state upward.
+- Stops before turning the answer into a broader lecture about `ViewModel`, state holders, or Compose architecture unless the interviewer asks.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- A stateful composable owns and changes some of its own state.
+- A stateless composable receives changing state from its caller instead of owning it.
+- Stateless does not mean static; the UI can still change whenever its inputs change.
+- Stateless APIs are useful when callers need control or coordination.
+- Local state is still appropriate when the behaviour is genuinely private to the component.
+- A stateless core and stateful convenience wrapper can coexist when both forms are useful.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [State hoisting in Compose — Android Developers](https://developer.android.com/develop/ui/compose/state-hoisting)
+
+</ReferenceList>
