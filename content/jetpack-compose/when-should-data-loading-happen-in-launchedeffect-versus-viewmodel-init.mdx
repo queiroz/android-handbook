@@ -1,47 +1,308 @@
 ---
 id: "CMP-010"
 title: "When should data loading happen in LaunchedEffect versus ViewModel.init?"
-description: "When should data loading happen in LaunchedEffect versus ViewModel.init."
+description: "Decide what should trigger initial screen loading without confusing Composition lifetime with state ownership."
 difficulty: "advanced"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
+  - compose
   - launched-effect
   - viewmodel
-prerequisites: []
-related: []
+  - state-production
+  - unidirectional-data-flow
+prerequisites:
+  - CMP-008
+  - CMP-009
+related:
+  - CMP-006
+  - CMP-008
+  - CMP-009
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+It depends on **what should cause the first load to happen**.
 
-## Short interview answer
+If the data is part of the screen's state, the `ViewModel` would normally stay responsible for that state rather than moving the load into `LaunchedEffect` just because the UI is now Compose. `LaunchedEffect` makes more sense when the work should start because that composable has entered the Composition, or because one of its keys changed.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+For newer Compose code, there may not need to be a manual first load at all. A `Flow` can expose the data and start doing the work when the UI begins collecting it.
 
-## Explanation
+So `LaunchedEffect` is not simply the Compose replacement for `ViewModel.init`. The decision comes down to **what should start the load and who should own it**.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The interviewer is usually testing whether you understand **who should be responsible for the first load**, rather than whether you know two different places where a coroutine can be started.
 
-## Common mistakes
+If you've worked with View-based Android, you may be used to loading data from `ViewModel.init`, or calling the `ViewModel` from `onViewCreated()`. Compose adds `LaunchedEffect`, so it can be tempting to move that old loading code there without thinking about what else changed.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer shows that you can separate **screen state from the UI that displays it**. You should be able to explain why the first load starts where it does, what happens if the UI is recreated, and why later actions such as retry or refresh are normal user events rather than another "initial load."
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "The screen uses Compose now, so `LaunchedEffect(Unit)` should replace the load that used to happen in the ViewModel."
+
+That looks like a small migration change:
+
+```kotlin
+LaunchedEffect(Unit) {
+    viewModel.loadOrders()
+}
+```
+
+but it changes **what starts the load**.
+
+`Unit` does not mean "run this once for as long as this screen state exists." It only prevents the effect from restarting because its key changed. If that part of the UI leaves the Composition and later comes back, the effect can run again.
+
+That may be exactly what the screen needs. But if loading the orders belongs to the `ViewModel` because those orders are part of the screen state, moving the trigger into Compose gives the UI a responsibility it did not have before.
+
+A migration from Views to Compose should not accidentally become a state-management rewrite.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+This decision existed before Compose.
+
+Imagine an orders screen in an older MVVM application. The `Fragment` could tell the `ViewModel` to load when its View was created:
+
+```kotlin
+class OrdersFragment : Fragment(R.layout.orders) {
+    override fun onViewCreated(
+        view: View,
+        savedInstanceState: Bundle?,
+    ) {
+        super.onViewCreated(view, savedInstanceState)
+        viewModel.loadOrders()
+    }
+}
+```
+
+That works, but there is an awkward detail: the Fragment's View can be recreated while the same `ViewModel` is still alive. If `onViewCreated()` always starts the request again, recreating the UI can also restart work that did not actually need restarting.
+
+A common alternative was to make the first load part of setting up the `ViewModel`:
+
+```kotlin
+class OrdersViewModel(
+    private val repository: OrdersRepository,
+) : ViewModel() {
+
+    init {
+        loadOrders()
+    }
+
+    private fun loadOrders() {
+        viewModelScope.launch {
+            // Load the orders and update the screen state.
+        }
+    }
+}
+```
+
+Now recreating the Fragment does not automatically start the load again because the same `ViewModel` can survive that configuration change.
+
+Compose gives the UI another way to start work:
+
+```kotlin
+@Composable
+fun OrdersRoute(
+    viewModel: OrdersViewModel = viewModel(),
+) {
+    LaunchedEffect(Unit) {
+        viewModel.loadOrders()
+    }
+
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    OrdersScreen(
+        state = uiState,
+        onRetry = viewModel::retry,
+    )
+}
+```
+
+This is not automatically wrong. It just means something different: **the load starts because this composable entered the Composition**.
+
+That can be useful in an architecture where the screen deliberately sends an initial event to the `ViewModel`. Some MVI-style codebases work this way because they prefer every change to start from an explicit event.
+
+The important part is knowing what comes with that choice. `LaunchedEffect` starts when it enters the Composition, stops when it leaves, and can start again when it comes back or when one of its keys changes.
+
+<Remember>
+
+**Compose gives the UI a new place to start work. It does not automatically make the UI responsible for loading the state it displays.**
+
+</Remember>
+
+The first load should also be kept separate from what happens after the user starts interacting with the screen.
+
+A retry or pull-to-refresh already has an obvious trigger:
+
+```kotlin
+OrdersScreen(
+    state = uiState,
+    onRetry = viewModel::retry,
+    onRefresh = viewModel::refresh,
+)
+```
+
+The user did something, the UI reports it to the `ViewModel`, and the `ViewModel` updates the state. There is no need to treat those actions like screen initialization.
+
+There is also a useful third option for data that can be observed continuously.
+
+Suppose the repository already exposes the orders as a `Flow`:
+
+```kotlin
+class OrdersViewModel(
+    repository: OrdersRepository,
+) : ViewModel() {
+
+    val uiState: StateFlow<OrdersUiState> =
+        repository.observeOrders()
+            .map { orders -> OrdersUiState.Content(orders) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = OrdersUiState.Loading,
+            )
+}
+```
+
+Compose only needs to observe that state:
+
+```kotlin
+val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+```
+
+There is no `init { load() }` and no `LaunchedEffect(Unit) { load() }`. When the screen starts observing the state, the underlying stream can start doing the work.
+
+That often fits Compose particularly well: **the UI observes state and sends user actions back up. It does not also need to remember to kick the data layer into life.**
+
+## Production thinking
+
+When working on a real screen, the first question should not be "`init` or `LaunchedEffect`?"
+
+Start with the screen itself.
+
+Imagine an orders screen that should show the latest orders whenever it is being used. If the repository can already expose those orders as a `Flow`, there is usually no reason for the composable to say "load now." The `ViewModel` can turn that stream into `uiState`, and Compose can simply observe it.
+
+That gives the code a very straightforward relationship:
+
+```text
+repository data → ViewModel state → Compose
+                       ↑
+                   user actions
+```
+
+This is the direction Android's current architecture guidance encourages, and it is a good default for new Compose code because there is less coordination to get wrong. The UI does not need a separate loading call that must stay in sync with the state it is already observing.
+
+Not every screen works that way, though.
+
+Sometimes the first load really is a one-off operation. In that case, an older codebase may already start it from `ViewModel.init`:
+
+```kotlin
+init {
+    loadOrders()
+}
+```
+
+That pattern has been common in Android for years, especially in MVVM applications. If a mature application already uses it consistently and it is behaving correctly, moving the UI to Compose is not a good reason by itself to rewrite every screen.
+
+For new code, however, there is a reason to be more deliberate. Current Android guidance advises against launching asynchronous work directly as a side effect of constructing a `ViewModel`. If the screen really needs an explicit first load, a small initialization function can make that decision visible and can protect against the caller accidentally triggering it twice:
+
+```kotlin
+class OrdersViewModel(
+    private val repository: OrdersRepository,
+) : ViewModel() {
+
+    private var initialized = false
+
+    fun initialize() {
+        if (initialized) return
+        initialized = true
+
+        viewModelScope.launch {
+            // Load the initial orders and update uiState.
+        }
+    }
+}
+```
+
+If the architecture intentionally says "start this when the Compose screen appears," `LaunchedEffect` can be the caller:
+
+```kotlin
+LaunchedEffect(viewModel) {
+    viewModel.initialize()
+}
+```
+
+Notice what makes this safer than blindly calling `loadOrders()`: if the composable leaves and later enters the Composition again, `initialize()` can decide that the first load has already happened. The UI can trigger the action without accidentally defining how many times the data is allowed to load.
+
+That is also why there is no universal "`init` is correct" or "`LaunchedEffect` is correct" answer.
+
+In a legacy MVVM screen, keeping an existing `init { load() }` may be the sensible choice during a Compose migration. In an MVI-style screen, sending an explicit initial event may fit the architecture better. In a newer Flow-based screen, neither may be necessary.
+
+For new Compose code, a useful preference is:
+
+1. **If the data can naturally be observed, let the `ViewModel` expose it as state and let the UI observe it.**
+2. **If the screen genuinely needs a one-time first load, make that initialization explicit and safe if it is called again.**
+3. **Use `LaunchedEffect` when the Composition really is what should trigger the work**, not simply because `LaunchedEffect` is a Compose API.
+4. **When migrating an existing app, keep working architecture unless there is a real reason to change it.**
+
+The architecture name matters less than being able to follow the story of the screen: **where does its data come from, what starts the first load, and what happens when the UI goes away and comes back?**
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What are side effects in Compose and how should they be handled?](/android/handbook/jetpack-compose/what-are-side-effects-in-compose-and-how-should-they-be-handled)
+- [How should you observe ViewModel state in Compose?](/android/handbook/jetpack-compose/how-should-you-observe-viewmodel-state-in-compose)
+- [What is state hoisting and why is it useful?](/android/handbook/jetpack-compose/what-is-state-hoisting-and-why-is-it-useful)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains **what should start the first load and who should own the resulting state**, rather than choosing an API by habit.
+- Understands that `LaunchedEffect(Unit)` follows the Composition and does not mean "once for the lifetime of the ViewModel."
+- Keeps the first load separate from later user actions such as retry, refresh, or submission.
+- Understands why older MVVM code often loaded from `ViewModel.init`, without assuming every new Compose screen should copy that pattern.
+- Looks for a `Flow`-based state model before adding another manual loading trigger when the data can naturally be observed.
+- Makes explicit initialization safe to call again when the UI can re-enter the Composition.
+- Avoids turning a View-to-Compose migration into an unnecessary architecture rewrite.
+- Can explain why different MVVM, MVI, or UDF-style codebases may make different choices while still keeping state ownership clear.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `LaunchedEffect` and `ViewModel.init` differ mainly in **what causes the first load to start and how long that trigger lives**.
+- Moving a screen to Compose does not automatically make Compose responsible for loading its screen state.
+- `LaunchedEffect(Unit)` does not mean "run once forever."
+- Retry, refresh, and other user actions are different from the first load and should be handled as normal events.
+- A `Flow`-based screen can often avoid a manual first-load call entirely.
+- Existing architecture matters: a Compose migration does not need to rewrite a working loading strategy just to look more "Compose-like."
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [UI state production — Android Developers](https://developer.android.com/topic/architecture/ui-layer/state-production)
+- [Recommendations for Android architecture — Android Developers](https://developer.android.com/topic/architecture/recommendations)
+- [UI layer — Android Developers](https://developer.android.com/topic/architecture/ui-layer)
+- [Where to hoist state — Android Developers](https://developer.android.com/develop/ui/compose/state-hoisting)
+- [Side-effects in Compose — Android Developers](https://developer.android.com/develop/ui/compose/side-effects)
+
+</ReferenceList>
