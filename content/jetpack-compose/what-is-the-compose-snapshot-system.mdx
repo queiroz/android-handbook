@@ -1,46 +1,339 @@
 ---
 id: "CMP-013"
 title: "What is the Compose snapshot system?"
-description: "What is the Compose snapshot system."
+description: "Understand how Compose tracks state reads and changes while keeping snapshot-backed state consistent."
 difficulty: "advanced"
 track: "advanced"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
-  - snapshot-system
-prerequisites: []
-related: []
+  - compose
+  - snapshots
+  - state
+  - recomposition
+  - state-management
+prerequisites:
+  - CMP-003
+  - CMP-004
+related:
+  - CMP-003
+  - CMP-004
+  - CMP-011
+  - CMP-012
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+The snapshot system is the machinery that makes **Compose state observable**.
 
-## Short interview answer
+When code reads snapshot-backed state such as `mutableStateOf`, Compose can keep track of that dependency. If the value changes later, the runtime knows which work depended on it and may need to run again.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+Snapshots also give code a **consistent view of state while changes are happening**. Changes can be kept separate for a while and then made visible together instead of exposing half-finished state.
 
-## Explanation
+Most Compose code does not manage snapshots directly. APIs such as `mutableStateOf`, `derivedStateOf`, and `snapshotFlow` use that system underneath.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The interviewer is usually testing whether you understand **why Compose can react to state changes automatically**, rather than treating `mutableStateOf` as a magic variable that somehow causes recomposition.
 
-## Common mistakes
+A strong answer connects two ideas:
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+- Compose can see **which snapshot-backed state was read**.
+- When that state changes, Compose can tell which work depended on it.
+
+The deeper part is understanding why it is called a **snapshot** in the first place. Compose also needs a consistent view of state while changes are happening. You do not want one part of the UI seeing a change halfway through while another part is still working with the old values.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "If an object is stored inside Compose state, every mutable field inside that object becomes observable too."
+
+It does not.
+
+Imagine this:
+
+```kotlin
+data class User(
+    var name: String,
+)
+
+val users = mutableStateListOf(
+    User("Alice"),
+)
+```
+
+The list participates in Compose's snapshot system, but `User.name` is still just a normal Kotlin property.
+
+So this:
+
+```kotlin
+users[0].name = "Bob"
+```
+
+changes the object, but it does not change the snapshot-aware list itself.
+
+A clearer approach is usually to make the model immutable and replace the value:
+
+```kotlin
+data class User(
+    val name: String,
+)
+
+users[0] = users[0].copy(
+    name = "Bob",
+)
+```
+
+Now the observable state actually changes.
+
+The useful lesson is not "never use `var`." It is that **Compose can only observe mutation that deliberately participates in its state system**.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Start with the simplest possible example:
+
+```kotlin
+var count by remember {
+    mutableStateOf(0)
+}
+
+Text("Count: $count")
+```
+
+When Compose runs `Text("Count: $count")`, it reads `count`.
+
+That read is important.
+
+Conceptually, Compose can remember:
+
+```text
+this piece of UI
+      ↓
+read count
+```
+
+Later:
+
+```kotlin
+count++
+```
+
+changes that snapshot-backed state.
+
+Now Compose has enough information to connect the two:
+
+```text
+count changed
+     ↓
+who read count?
+     ↓
+this part of the UI
+     ↓
+that work may need to run again
+```
+
+That is why `mutableStateOf` is different from an ordinary Kotlin variable. It participates in a state system that can observe reads and writes.
+
+<Remember>
+
+**Compose can react to state because the snapshot system knows what was read and what later changed.**
+
+</Remember>
+
+So far, that explains how Compose notices state. But there is another reason the word **snapshot** matters.
+
+Imagine a screen has two related pieces of state:
+
+```kotlin
+var firstName by mutableStateOf("Ada")
+var lastName by mutableStateOf("Lovelace")
+```
+
+Now some work needs to change both values.
+
+Imagine both values are being updated as part of the same piece of work. We do not want other code seeing an awkward halfway state where the first name is new but the last name is still old.
+
+A snapshot gives that work a consistent view of the state. Changes can stay out of sight while they are being made and then become visible together when they are ready.
+
+A useful way to picture that is:
+
+```text
+current state
+     ↓
+work inside a snapshot
+     ↓
+make related changes
+     ↓
+apply
+     ↓
+new state becomes visible
+```
+
+In normal Compose code, you rarely manage any of this yourself. The state APIs you already use sit on top of the snapshot system and do the work for you.
+
+This also explains other Compose state APIs.
+
+For example:
+
+```kotlin
+derivedStateOf {
+    listState.firstVisibleItemIndex > 0
+}
+```
+
+can know which state it depends on because the state reads inside its calculation are observable.
+
+Likewise:
+
+```kotlin
+snapshotFlow {
+    listState.firstVisibleItemIndex
+}
+```
+
+can observe which snapshot state was read and react when those dependencies change.
+
+They solve different problems, but underneath they both depend on the same useful trick: Compose can see which state was read and react when that state changes.
+
+## Production thinking
+
+In production, the snapshot system becomes much easier to reason about when you ask a simpler question:
+
+> **Where can this state actually change in a way Compose can see?**
+
+Imagine a checkout form:
+
+```kotlin
+data class CheckoutForm(
+    var email: String,
+    var phone: String,
+)
+
+var form by mutableStateOf(
+    CheckoutForm(
+        email = "",
+        phone = "",
+    )
+)
+```
+
+Then somewhere in the screen:
+
+```kotlin
+form.email = newEmail
+```
+
+This code looks reasonable at first glance. `form` is inside `mutableStateOf`, so it is easy to assume Compose will notice any change inside it.
+
+The catch is that Compose is watching `form` itself. Changing `email` inside the same `CheckoutForm` object does not assign a new value to `form`, so the change does not cross the state boundary Compose is watching.
+
+One option is to make the model immutable:
+
+```kotlin
+data class CheckoutForm(
+    val email: String,
+    val phone: String,
+)
+
+var form by mutableStateOf(
+    CheckoutForm(
+        email = "",
+        phone = "",
+    )
+)
+
+form = form.copy(
+    email = newEmail,
+)
+```
+
+Now the change is obvious to Compose: `form` receives a new value.
+
+Another valid design is to make the individual fields deliberately observable:
+
+```kotlin
+class CheckoutFormState {
+    var email by mutableStateOf("")
+    var phone by mutableStateOf("")
+}
+```
+
+Here, `email` and `phone` are themselves Compose state, so changing either one is something Compose can observe.
+
+Neither pattern is automatically the right one for every screen.
+
+The useful production question is:
+
+> **"Where do we want observable mutation to live?"**
+
+If a screen uses immutable UI models, replacing the model can make changes easy to follow and test. If a dedicated UI-state holder owns fine-grained editing state, individual snapshot-backed properties may be a better fit.
+
+The troublesome version is usually the one in the middle: a deeply mutable object where some changes are Compose state and others are just ordinary Kotlin mutations. That makes it much harder to tell which updates the UI can actually see.
+
+This is also why not every piece of application state needs to become `mutableStateOf`.
+
+A `ViewModel` may already expose:
+
+```kotlin
+StateFlow<UiState>
+```
+
+and that can remain the application's state model. Compose can observe it at the UI boundary. The snapshot system does not replace Flow, repositories, or the rest of the app architecture. It is simply how Compose keeps track of the state it is working with.
+
+That is usually the practical value of understanding snapshots: state becomes easier to design, and bugs where the UI "didn't notice" a change become much easier to explain. Most Android code will benefit from that understanding without ever calling a low-level `Snapshot` API.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is recomposition and what triggers it?](/android/handbook/jetpack-compose/what-is-recomposition-and-what-triggers-it)
+- [What is `derivedStateOf` and when is it useful?](/android/handbook/jetpack-compose/what-is-derivedstateof-and-when-is-it-useful)
+- [What is `snapshotFlow`?](/android/handbook/jetpack-compose/what-is-snapshotflow)
+- [How does state work in Jetpack Compose?](/android/handbook/jetpack-compose/how-does-state-work-in-jetpack-compose)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains snapshots as the **observable state system underneath Compose**, not just as a mechanism that "triggers recomposition."
+- Understands that snapshot-backed state can record reads so Compose knows what depends on what.
+- Knows that snapshots also provide a consistent view of state while changes are being made.
+- Does not assume arbitrary mutation inside an observable object automatically becomes observable.
+- Makes observable state boundaries deliberate, whether through immutable models or snapshot-backed properties.
+- Understands that Compose snapshots do not replace `Flow`, `StateFlow`, or application-level state architecture.
+- Knows that most application code benefits from the snapshot system indirectly and rarely needs low-level snapshot APIs.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- The snapshot system makes Compose state observable by tracking state reads and changes.
+- Compose can use those dependencies to know which work may need to run again when state changes.
+- Snapshots also give code a consistent view of snapshot-backed state while changes are being made.
+- Putting an object inside Compose state does not make every mutable field inside it observable.
+- Good Compose code makes observable mutation boundaries easy to see.
+- Most developers use the snapshot system indirectly through APIs such as `mutableStateOf`, `derivedStateOf`, and `snapshotFlow`.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Snapshot — Compose Runtime API reference](https://developer.android.com/reference/kotlin/androidx/compose/runtime/snapshots/Snapshot)
+- [Phases of Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/phases)
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Compose API guidelines — AndroidX](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/compose/docs/compose-api-guidelines.md)
+
+</ReferenceList>
