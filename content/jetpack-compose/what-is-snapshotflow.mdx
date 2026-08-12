@@ -1,46 +1,299 @@
 ---
 id: "CMP-012"
 title: "What is snapshotFlow?"
-description: "What is snapshotFlow."
+description: "Observe Compose-owned state as a Flow when work needs to react to changes instead of rendering them directly."
 difficulty: "advanced"
 track: "advanced"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 7
+answerTime: "~45 sec"
+status: "published"
 tags:
+  - compose
   - snapshot-flow
-prerequisites: []
-related: []
+  - flow
+  - state
+  - side-effects
+prerequisites:
+  - CMP-009
+  - CMP-011
+related:
+  - CMP-003
+  - CMP-009
+  - CMP-011
+  - CMP-013
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+`snapshotFlow` lets **Flow code listen to state that belongs to Compose**.
 
-## Short interview answer
+Imagine a `LazyColumn`. Compose can tell you which item is currently visible, and that value changes as the user scrolls. If the UI needs that information to show a **Back to top** button, normal Compose state or `derivedStateOf` is a good fit.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+But if the app needs to do something because that state changed — for example, send analytics when the user scrolls past the first item — `snapshotFlow` can expose those Compose state changes as a Kotlin `Flow`. That gives you normal Flow operators such as `map`, `filter`, and `debounce` without turning every change into UI state.
 
-## Explanation
+It is useful when **Compose owns the changing value, but the consumer needs a stream of changes rather than something to render**.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The interviewer is usually testing whether you understand the difference between **using state to describe the UI** and **reacting to state changes by doing some work**.
 
-## Common mistakes
+Compose already knows how to observe its own state and update the screen. `snapshotFlow` matters when that same state needs to cross into coroutine and Flow code — for example, analytics, debouncing, or another reaction that should not become part of what the UI renders.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer also shows that you know when **not** to use it. If the value already comes from a `Flow`, keep using that Flow. If the UI simply needs a smaller value derived from Compose state, `derivedStateOf` is often the better fit.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "If some Compose state changes, wrap it in `snapshotFlow`."
+
+That adds another layer even when the UI already knows how to observe the state directly.
+
+Imagine a product list where the requirement is only to show a **Back to top** button. That is a UI decision:
+
+```kotlin
+val showBackToTop by remember {
+    derivedStateOf {
+        listState.firstVisibleItemIndex > 0
+    }
+}
+```
+
+The screen needs the Boolean to decide what to draw, so keeping it as Compose state makes sense.
+
+But if the requirement is:
+
+> "Send an analytics event when the user moves past the first item."
+
+nothing new needs to be drawn. Now the app needs to **react** to the scroll state, and `snapshotFlow` becomes useful.
+
+The API is not a better way to observe all state. It is a bridge for the cases where Compose-owned state needs to be handled as a Flow.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a shopping app with a long product list.
+
+The screen already keeps its scroll position in a `LazyListState`:
+
+```kotlin
+val listState = rememberLazyListState()
+```
+
+That state can tell Compose which item is currently the first one visible on screen:
+
+```kotlin
+listState.firstVisibleItemIndex
+```
+
+While the user scrolls, that value might change like this:
+
+```text
+0 → 1 → 2 → 3 → 4 → 5 ...
+```
+
+If the screen only needs that value to decide what to draw, Compose can use the state directly.
+
+Now imagine the product team asks for something different:
+
+> "Track when someone scrolls past the first product so we know they started exploring the list."
+
+Nothing new needs to appear on screen. The app needs to **listen to the scroll state and react to it**.
+
+That is a good fit for `snapshotFlow`:
+
+```kotlin
+LaunchedEffect(listState) {
+    snapshotFlow {
+        listState.firstVisibleItemIndex
+    }
+        .map { index -> index > 0 }
+        .distinctUntilChanged()
+        .filter { hasScrolled -> hasScrolled }
+        .collect {
+            analytics.scrolledPastFirstItem()
+        }
+}
+```
+
+Read it from top to bottom:
+
+- `snapshotFlow` watches the Compose state read inside its block.
+- `map` turns item positions such as `0`, `1`, `2`, `3` into a simple `false` or `true`.
+- `distinctUntilChanged` ignores repeated answers such as `true, true, true`.
+- `filter` keeps only the `true` case.
+- `collect` is where the analytics work actually happens.
+
+So the list can move through many positions, while the analytics code only sees the change it cares about.
+
+There are two APIs in that example because they have different jobs.
+
+`LaunchedEffect` gives the collection a coroutine that lives with this part of the UI. `snapshotFlow` watches the Compose state inside that coroutine and sends changes through a normal Kotlin `Flow`.
+
+That is different from doing this:
+
+```kotlin
+LaunchedEffect(listState.firstVisibleItemIndex) {
+    analytics.trackScroll()
+}
+```
+
+Here every new index becomes a new effect key, so Compose cancels the current effect and starts it again as the user scrolls.
+
+With `snapshotFlow`, one effect can stay alive while the changing values move through the Flow.
+
+<Remember>
+
+**Use `snapshotFlow` when Compose owns the changing state, but the code reacting to it needs a Flow rather than another value to render.**
+
+</Remember>
+
+One detail is worth keeping in mind: the block passed to `snapshotFlow` should only **read state and calculate a value**.
+
+Keep the work outside it:
+
+```kotlin
+snapshotFlow {
+    listState.firstVisibleItemIndex > 0
+}.collect { hasScrolled ->
+    if (hasScrolled) {
+        analytics.scrolledPastFirstItem()
+    }
+}
+```
+
+That keeps the code easy to reason about: first observe the state, then react to what was emitted.
+
+`snapshotFlow` is also observing **state**, not recording every event that ever happened. If every individual occurrence matters — a payment attempt, a message being sent, or a purchase completing — model those as events at the source instead of trying to rebuild them later from UI state.
+
+## Production thinking
+
+A useful production example is a search screen.
+
+Imagine the search field keeps its editing state in Compose:
+
+```kotlin
+val searchState = rememberTextFieldState()
+```
+
+As someone types, the text changes quickly:
+
+```text
+a → an → and → andr → andro → android
+```
+
+The UI needs those changes immediately so the text field feels responsive. But the search request is different. We probably do not want to hit the backend for every key press.
+
+This is where `snapshotFlow` can be a good bridge:
+
+```kotlin
+LaunchedEffect(searchState) {
+    snapshotFlow {
+        searchState.text.toString()
+    }
+        .map { query -> query.trim() }
+        .distinctUntilChanged()
+        .debounce(300)
+        .collectLatest { query ->
+            viewModel.search(query)
+        }
+}
+```
+
+The text still belongs to Compose, but now its changes can use normal Flow behaviour.
+
+`debounce(300)` waits for a short pause instead of reacting to every character. `collectLatest` means that if a newer query arrives while work for an older one is still running, the older collection can be cancelled so the latest query wins.
+
+Conceptually:
+
+```text
+a → an → and → andr → andro → android
+                         ↓
+                      debounce
+                         ↓
+                      android
+                         ↓
+                       search
+```
+
+The important decision is not "this value changes a lot, so use `snapshotFlow`."
+
+It is:
+
+> **Compose owns this state, but another piece of work needs to react to its changes as a stream.**
+
+That distinction matters in an existing architecture too.
+
+If a `ViewModel` already exposes the search query as a `StateFlow`, there is usually no reason to send it through Compose state and then wrap it in `snapshotFlow` just to get a Flow again:
+
+```text
+StateFlow
+   ↓
+Compose State
+   ↓
+snapshotFlow
+   ↓
+Flow
+```
+
+The Flow already exists. Work with it directly where the search logic belongs.
+
+On the other hand, when the source genuinely is Compose-owned state — a state-based text field is one example — `snapshotFlow` gives the rest of the app a clean way to react without moving that state somewhere else just to observe it.
+
+A useful code-review question is:
+
+> **"Does Compose own this state, and do we genuinely need to react to it as a stream?"**
+
+If the answer to either part is no, `snapshotFlow` probably is not the tool the code needs.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is `derivedStateOf` and when is it useful?](/android/handbook/jetpack-compose/what-is-derivedstateof-and-when-is-it-useful)
+- [What are side effects in Compose and how should they be handled?](/android/handbook/jetpack-compose/what-are-side-effects-in-compose-and-how-should-they-be-handled)
+- [What is recomposition and what triggers it?](/android/handbook/jetpack-compose/what-is-recomposition-and-what-triggers-it)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains `snapshotFlow` as a **bridge from Compose-owned state into Flow code**, not just as an API that "converts State to Flow."
+- Separates values needed for rendering from values that need to trigger work.
+- Knows why `snapshotFlow` and `LaunchedEffect` often appear together: one observes the state, while the other owns the coroutine lifetime.
+- Uses the original `Flow` when one already exists instead of converting `Flow → Compose State → Flow` for no reason.
+- Understands that the `snapshotFlow` block should read state and calculate a value, while side effects happen after emission.
+- Does not treat snapshot state as a guaranteed history of every event that happened.
+- Can explain when `derivedStateOf` is the better choice because the consumer is the UI itself.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `snapshotFlow` lets Flow code observe state that belongs to Compose.
+- Use it when Compose owns the changing value but the consumer needs a stream of changes rather than something to render.
+- `LaunchedEffect` controls the lifetime of the collection; `snapshotFlow` turns snapshot-state reads into Flow emissions.
+- If the UI needs a derived value, `derivedStateOf` may be a better fit.
+- If the value is already exposed as a `Flow`, keep using that Flow.
+- Snapshot state represents the latest state, not a guaranteed event history.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Side-effects in Compose — Android Developers](https://developer.android.com/develop/ui/compose/side-effects)
+- [`snapshotFlow` — Compose Runtime API reference](<https://developer.android.com/reference/kotlin/androidx/compose/runtime/package-summary#snapshotFlow(kotlin.Function0)>)
+- [Lazy lists and lazy grids — Android Developers](https://developer.android.com/develop/ui/compose/lists)
+- [Migrate to state-based text fields — Android Developers](https://developer.android.com/develop/ui/compose/text/migrate-state-based)
+
+</ReferenceList>
