@@ -1,46 +1,277 @@
 ---
 id: "CMP-011"
 title: "What is derivedStateOf and when is it useful?"
-description: "What is derivedStateOf and when is it useful."
+description: "Use derived state when Compose state changes more often than the UI actually needs to react."
 difficulty: "advanced"
 track: "advanced"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 7
+answerTime: "~45 sec"
+status: "published"
 tags:
+  - compose
   - derived-state
-prerequisites: []
-related: []
+  - recomposition
+  - performance
+prerequisites:
+  - CMP-003
+  - CMP-004
+related:
+  - CMP-003
+  - CMP-009
+  - CMP-012
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+`derivedStateOf` creates a piece of Compose state **from other Compose state**. It is useful when the source state changes often, but the UI only needs to update when the value calculated from it actually changes.
 
-## Short interview answer
+Imagine a scrolling list. Compose can tell you which item is currently the first visible one, so while the user scrolls that number might change from `0` to `1`, `2`, `3`, and so on. A **Back to top** button does not care about every one of those positions. It only cares whether the user is still at the top or has moved past it.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+`derivedStateOf` can turn those frequent position changes into a simpler value such as `showBackToTop`. The UI reading that derived state only needs to react when the answer changes between `false` and `true`.
 
-## Explanation
+It is not needed for every value calculated from state. If the UI needs the new result every time the inputs change, a normal Kotlin expression is usually simpler.
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+</ShortAnswer>
 
-## Code example
+## What the interviewer is testing
 
-{/* Include a focused example only when code makes the answer clearer. */}
+The interviewer is usually testing whether you understand the difference between **state changing** and **the UI actually needing to change because of it**.
 
-## Common mistakes
+Compose state can change frequently, especially with things like scrolling. That is not automatically a problem, and recomposition is a normal part of Compose. The useful judgement is noticing when the UI only cares about a much simpler result than all of those individual state changes.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+A strong answer explains why `derivedStateOf` can help in that situation, but also knows when to leave the code alone. If every input change should produce a new value on screen, a normal Kotlin expression is often the clearer choice.
+
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "If one value is calculated from other state, it should use `derivedStateOf`."
+
+The name makes that sound reasonable, but most calculated values do not need it.
+
+Imagine a profile form:
+
+```kotlin
+var firstName by remember { mutableStateOf("") }
+var lastName by remember { mutableStateOf("") }
+
+val fullName by remember {
+    derivedStateOf {
+        "$firstName $lastName"
+    }
+}
+```
+
+Every time either name changes, the UI needs the new full name anyway. Nothing is being filtered out.
+
+The simpler version is enough:
+
+```kotlin
+val fullName = "$firstName $lastName"
+```
+
+`derivedStateOf` has its own cost, so wrapping ordinary calculations in it just because they depend on state can make the code more complicated without improving the UI.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a product list built with `LazyColumn` and a **Back to top** button.
+
+A `LazyColumn` can keep its scroll information in a `LazyListState`, created with `rememberLazyListState()`. One of the values it exposes is `firstVisibleItemIndex` — simply the position of the first item currently visible on screen.
+
+So as the user scrolls, that value might look like this:
+
+```text
+first visible item
+
+0 → 1 → 2 → 3 → 4 → 5 → 6 ...
+```
+
+The button does not need all of those positions. It only needs to answer one question: **has the user moved past the first item?**
+
+```text
+show button?
+
+false → true
+```
+
+Once the user is past the first item, changing from item `2` to `3`, or `20` to `21`, does not change what the button should display.
+
+That is a good fit for `derivedStateOf`:
+
+```kotlin
+val listState = rememberLazyListState()
+
+val showBackToTop by remember {
+    derivedStateOf {
+        listState.firstVisibleItemIndex > 0
+    }
+}
+```
+
+Now the UI can depend on `showBackToTop` instead of reacting to every visible-item change:
+
+```kotlin
+AnimatedVisibility(visible = showBackToTop) {
+    ScrollToTopButton()
+}
+```
+
+The useful part is not that Compose has calculated a Boolean. Kotlin could already do that.
+
+The useful part is that **the Boolean changes much less often than the scroll state it comes from**.
+
+When the list moves from item `4` to `5`, Compose can check the derived value and see that it is still `true`. The UI reading `showBackToTop` does not need to react as though its state changed.
+
+<Remember>
+
+**If the input is changing constantly but the UI only cares when it crosses a meaningful boundary, that is where `derivedStateOf` starts to make sense.**
+
+</Remember>
+
+It is also worth separating this from `remember`.
+
+Suppose sorting a list is expensive:
+
+```kotlin
+val sortedUsers = remember(users) {
+    users.sortedBy { it.name }
+}
+```
+
+Here `remember(users)` avoids doing the sort again while `users` has not changed.
+
+That is a different problem.
+
+With `derivedStateOf`, the interesting part is that the **source can change many times while the value the UI cares about stays the same**.
+
+So a useful way to think about the two is:
+
+```text
+Avoid repeating a calculation while its input is unchanged
+    → remember(key)
+
+Let source state change frequently,
+but only update the UI when the derived result changes
+    → derivedStateOf
+```
+
+There is another nearby API that solves a different problem.
+
+If the screen should **render** a value such as `showBackToTop`, `derivedStateOf` is a natural fit.
+
+If instead the app needs to react outside normal rendering — for example, send analytics the first time the user scrolls past the first item — that is closer to `snapshotFlow`, which can turn Compose state changes into a `Flow`.
+
+That distinction keeps `derivedStateOf` focused on what it is good at: giving the UI a smaller piece of state to observe.
+
+## Production thinking
+
+In production code, `derivedStateOf` is most useful when there is an obvious gap between **how often something changes** and **how often the UI should change because of it**.
+
+Scrolling is the classic example because the difference is easy to see.
+
+Imagine a product screen where the toolbar becomes compact after the user scrolls past 200 pixels:
+
+```kotlin
+val showCompactToolbar by remember {
+    derivedStateOf {
+        scrollState.value > 200
+    }
+}
+```
+
+`scrollState.value` may change on almost every small movement of the user's finger:
+
+```text
+184 → 189 → 195 → 201 → 207 → 214 → 220 ...
+```
+
+The toolbar does not care about all of those numbers. It only cares when the answer changes between:
+
+```text
+false ↔ true
+```
+
+That is the kind of code where `derivedStateOf` makes the relationship clearer and can avoid making the UI react to every intermediate scroll value.
+
+Now compare it with a checkout screen:
+
+```kotlin
+val canCheckout =
+    cart.isNotEmpty() && selectedAddress != null
+```
+
+If the cart changes or the selected address changes, the checkout button probably **does** need the new answer. There is no useful gap between the source changing and the UI needing to react.
+
+Wrapping that in `derivedStateOf` would make the code look more sophisticated without solving a real problem.
+
+That is why I would not treat `derivedStateOf` as a default performance trick. Start with ordinary Kotlin and normal Compose state. If profiling or the shape of the state makes it clear that a fast-changing value is causing UI work even though the meaningful result rarely changes, then `derivedStateOf` becomes a good tool.
+
+The same rule helps during code review.
+
+When this appears:
+
+```kotlin
+val something by remember {
+    derivedStateOf {
+        // ...
+    }
+}
+```
+
+the useful question is not:
+
+> "Is this derived from state?"
+
+It is:
+
+> **"Does this result change less often than the state it reads?"**
+
+If the answer is no, there is usually no reason for `derivedStateOf` to be there.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is recomposition and what triggers it?](/android/handbook/jetpack-compose/what-is-recomposition-and-what-triggers-it)
+- [What is snapshotFlow?](/android/handbook/jetpack-compose/what-is-snapshotflow)
+- [What are side effects in Compose and how should they be handled?](/android/handbook/jetpack-compose/what-are-side-effects-in-compose-and-how-should-they-be-handled)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains the **difference between source-state changes and meaningful UI changes** instead of only defining the API.
+- Knows that `derivedStateOf` is useful when the result changes less often than the state it reads.
+- Does not wrap every calculated value in `derivedStateOf`.
+- Separates `derivedStateOf` from `remember`: one can reduce unnecessary UI updates, while the other can avoid repeating a calculation for unchanged inputs.
+- Understands that recomposition itself is normal and does not add optimisation code without a reason.
+- Recognises when `snapshotFlow` is a better fit because the consumer is doing work outside normal UI rendering.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- Use `derivedStateOf` when source state changes more often than the UI actually needs to react.
+- A value being calculated from state does not automatically mean it needs `derivedStateOf`.
+- The best examples usually involve a meaningful boundary: scrolled or not, above or below a threshold, empty or not empty.
+- `remember(key)` and `derivedStateOf` solve different problems.
+- `derivedStateOf` has a cost, so ordinary Kotlin should remain the default when every input change also needs a UI change.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Side-effects in Compose — Android Developers](https://developer.android.com/develop/ui/compose/side-effects)
+- [Follow best practices — Jetpack Compose performance — Android Developers](https://developer.android.com/develop/ui/compose/performance/bestpractices)
+- [Lazy lists and lazy grids — Android Developers](https://developer.android.com/develop/ui/compose/lists)
+
+</ReferenceList>
