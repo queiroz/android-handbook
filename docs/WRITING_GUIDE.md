@@ -382,6 +382,35 @@ Instead of abstract phrases like "imperative work", use concrete examples:
 
 Once the reader understands the problem, introduce the technical term only if it genuinely improves understanding.
 
+### Prefer conversational language over documentation language
+
+Use the simplest language that preserves the technical meaning.
+
+Technical terminology is useful when the term itself is important to the concept or is language an engineer is expected to know. Do not use formal terminology merely because it sounds more precise.
+
+Prefer:
+
+- "keeping the dependency visible" over "maintaining an explicit dependency" when the distinction itself is not being taught;
+- "doing some work because the UI changed" before introducing "imperative work";
+- "the composables below it" over "descendants" when tree terminology adds nothing; and
+- concrete actions such as navigating, loading data, or registering a listener before abstract categories.
+
+This does not mean avoiding technical vocabulary. Terms such as recomposition, lifecycle, cancellation, state hoisting, and structured concurrency should be used when they are the concepts being taught. Introduce terminology after the reader understands the problem it describes.
+
+A useful test is:
+
+> **Would an Android engineer naturally use this wording while explaining the idea to a teammate?**
+
+If a simpler sentence communicates the same technical meaning, prefer the simpler sentence.
+
+### Reader-facing voice
+
+Write interview pages as a conversation with the reader. Use **"you"** naturally when describing what the interviewer is evaluating or what the reader might do in an interview.
+
+Avoid referring to the reader as **"the candidate"** in reader-facing prose. That wording is appropriate in contributor documentation when discussing candidates generally, but it creates distance inside the handbook.
+
+Avoid first-person author commentary such as "I would", "we would", or "my rule". Present the reasoning directly instead.
+
 ## Writing order
 
 For every handbook page:
