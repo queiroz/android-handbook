@@ -233,100 +233,140 @@ This is the same state boundary that appears elsewhere in Compose: the code need
 
 ## Production thinking
 
-Suppose a pull request adds this to a filter panel:
+The easiest place to understand snapshot collections is a screen that genuinely owns a small mutable collection.
+
+Imagine an editor where the user can add and remove tags before saving:
 
 ```kotlin
-val selectedFilters = remember {
-    mutableStateListOf<FilterId>()
+@Composable
+fun TagEditor() {
+    val tags = remember {
+        mutableStateListOf<String>()
+    }
+
+    // ...
 }
 ```
 
-Before questioning the API, look at who owns the state.
-
-These selections exist only while this piece of UI is being edited. The UI adds and removes individual IDs, and Compose needs to react as the collection changes. A state list is doing exactly the job needed here: the collection itself is local UI state, and its individual mutations matter.
-
-Now suppose another pull request changes a task screen from an immutable `UiState` to a `SnapshotStateList<Task>` because "Compose handles state lists better."
-
-That deserves a different conversation.
-
-Imagine the screen state already looks like this:
+When the user adds a tag:
 
 ```kotlin
-data class TasksUiState(
-    val tasks: List<Task>,
-    val isLoading: Boolean,
-    val errorMessage: String?,
+tags.add("Compose")
+```
+
+or removes one:
+
+```kotlin
+tags.remove("Compose")
+```
+
+Compose can observe those structural changes and update the UI that reads the list.
+
+For local UI state, that can be exactly what the screen needs. There is no requirement to create a new list every time the user edits it, and the mutation is happening in the same small state owner that renders the result.
+
+Now suppose the feature grows.
+
+The tags are no longer temporary values created only by the editor. They come from a repository, saving can fail, the screen has loading state, another part of the feature can update them, and the `ViewModel` becomes the owner of the screen state.
+
+At that point, exposing this directly:
+
+```kotlin
+val tags = mutableStateListOf<String>()
+```
+
+from the `ViewModel` gives the UI a mutable collection owned by the `ViewModel`.
+
+The screen can now do this:
+
+```kotlin
+viewModel.tags.add("Compose")
+```
+
+Technically it works, but the ownership has become blurry. The UI is no longer asking the feature owner to add a tag; it is reaching into the owner's state and changing the collection itself.
+
+A clearer boundary is usually for the `ViewModel` to expose state the UI can read:
+
+```kotlin
+data class TagEditorUiState(
+    val tags: List<String> = emptyList(),
+    val isSaving: Boolean = false
 )
 ```
 
-The tasks come from Room through a repository, the `ViewModel` combines them with other state, and the UI renders the latest `TasksUiState`.
-
-In that design, replacing `tasks` with another immutable list is already a clear state change. The data naturally arrives as values over time, and the `ViewModel` already owns the screen state.
-
-Turning that list into a `SnapshotStateList` would not automatically make the architecture better. It would introduce another way for state to change without solving an ownership problem the screen actually has.
-
-That does **not** mean snapshot collections are only for state owned directly by a composable.
-
-A `ViewModel` can own one too:
+and expose actions for changes:
 
 ```kotlin
-class CartViewModel : ViewModel() {
+fun addTag(tag: String)
+fun removeTag(tag: String)
+```
 
-    private val _items = mutableStateListOf<CartItem>()
+Now the UI renders the current state and tells the owner what happened. The owner decides how the collection changes, whether it needs validation, whether the change should be persisted, and how it interacts with the rest of the screen state.
 
-    val items: List<CartItem>
-        get() = _items
+That does not make `mutableStateListOf` a "small apps only" API.
 
-    fun removeItem(id: String) {
-        _items.removeAll { it.id == id }
-    }
+It means the useful question is **where the mutable collection is owned**.
+
+A custom Compose component may own selected items locally:
+
+```kotlin
+val selectedIds = remember {
+    mutableStateListOf<Long>()
 }
 ```
 
-The useful question in review is not:
+A drag-and-drop editor may need a locally mutable ordering while the user is interacting with it. A map-based UI helper may genuinely benefit from `mutableStateMapOf` while entries are added and removed independently.
 
-> "Why is Compose state inside the `ViewModel`?"
+Those are all reasonable uses because the mutable collection is close to the UI behavior it represents.
 
-It is:
+The boundary changes when that collection becomes part of the feature's application state.
 
-> **Who is allowed to change this collection?**
+Imagine a shopping screen where products come from a repository:
 
-Here the answer is clear. The `ViewModel` owns the mutable collection. The UI can read the items and send events back, but it cannot add, remove, or clear items directly.
+```text
+Repository
+    ↓
+ViewModel
+    ↓
+UiState
+    ↓
+Composable
+```
 
-Compare that with:
+The repository remains the source of the data. The `ViewModel` combines that data with whatever else the screen needs and exposes a state value. The composable renders it.
+
+There is usually little benefit in converting that entire flow into a `SnapshotStateList` simply because the final consumer is Compose. Compose already knows how to observe state delivered through mechanisms such as `StateFlow` and render the latest immutable list.
+
+The same reasoning applies to maps.
+
+`mutableStateMapOf` is useful when the UI owner really does need observable key/value mutations:
 
 ```kotlin
-class CartViewModel : ViewModel() {
-    val items = mutableStateListOf<CartItem>()
+val expandedSections = remember {
+    mutableStateMapOf<String, Boolean>()
 }
 ```
 
-Now callers can do this:
+Changing one entry:
 
 ```kotlin
-viewModel.items.clear()
-viewModel.items.add(item)
+expandedSections[id] = true
 ```
 
-Compose will observe those changes just fine. The problem is elsewhere: the part of the application that is supposed to own the cart no longer controls how the cart changes.
+is a natural local UI operation.
 
-That is the production boundary worth protecting.
+But if that map represents server data, cached domain objects, or feature state shared across several screens, the fact that `SnapshotStateMap` is observable does not make it the right architectural boundary.
 
-The same restraint helps with performance arguments.
+So when choosing between a snapshot collection and an ordinary immutable collection, work from ownership rather than from the API name:
 
-It can look wasteful to create another immutable list when one item changes, while a state list can update an entry directly. But that difference alone is not a reason to redesign a clear screen-state model.
+1. **Who owns the collection?** Local Compose state is a natural place for snapshot collections.
+2. **Who is allowed to change it?** If callers should not mutate the owner's state directly, do not expose the mutable collection as the feature boundary.
+3. **What else travels with this state?** Once loading, errors, persistence, validation, or other fields belong with it, a broader `UiState` often tells the story better.
+4. **Where does the data really come from?** Repository or database data should keep its real source of truth instead of being copied into snapshot collections just to make Compose react.
+5. **Does the UI actually need in-place observable mutations?** If not, an immutable `List` or `Map` may be simpler.
 
-If an immutable `UiState` is easy to follow and performs well, there is no problem to solve. If profiling later shows that a large, frequently changing collection is genuinely expensive, then a more fine-grained state model can be considered with evidence.
+`mutableStateListOf` and `mutableStateMapOf` are useful because they make collection mutations observable to Compose.
 
-When a state collection appears in review, a few questions usually make the decision much easier:
-
-1. **Who owns this collection?** A temporary UI selection and a list produced from repositories do not necessarily need the same state model.
-2. **What needs to change?** Does the code naturally replace the whole value, or does it need observable add/remove/update operations on one collection?
-3. **Who can mutate it?** The owner should normally control changes rather than handing a writable collection to every caller.
-4. **Where does the data come from?** If the application already produces immutable values through repositories and `Flow`, converting them into a snapshot collection may not buy anything.
-5. **Is the collection actually changing?** If the real mutation is hidden inside an item, changing the collection type does not fix that problem.
-
-The sequence matters: **choose the owner first, understand what needs to change, then choose the collection model that makes those changes easiest to follow.**
+The production decision is not whether they are "good" or "bad." It is whether **a mutable snapshot collection is the right state model at that ownership boundary**.
 
 ## Follow-up questions
 

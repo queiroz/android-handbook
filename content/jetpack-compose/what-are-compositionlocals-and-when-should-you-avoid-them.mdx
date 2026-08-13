@@ -200,78 +200,128 @@ That distinction is useful to know, but it comes after the more important decisi
 
 ## Production thinking
 
-Imagine a pull request adds this near the top of a checkout feature:
+A good way to decide whether a `CompositionLocal` belongs in an app is to start with something that genuinely needs to travel through a large part of the UI.
+
+Imagine the app records analytics when important actions happen.
+
+At first, passing an analytics object directly looks completely reasonable:
 
 ```kotlin
-val LocalCheckoutViewModel = compositionLocalOf<CheckoutViewModel> {
-    error("CheckoutViewModel not provided")
+@Composable
+fun HomeScreen(
+    analytics: Analytics
+) {
+    Feed(
+        analytics = analytics
+    )
 }
 ```
 
-The first review question should not be about `compositionLocalOf`. It should be: **why does the checkout UI need the whole `ViewModel` available everywhere underneath it?**
+Then `Feed` passes it to `ArticleCard`, which passes it to an action row, which finally uses it when the user taps Share.
 
-If the reason is simply that the `ViewModel` would otherwise pass through three composables, the local is probably hiding the wrong thing.
+The middle composables do not care about analytics. They are only carrying it because something further down needs it:
 
-Suppose the component at the bottom only needs `price`, `isLoading`, and `onPay`. Giving it access to the whole `ViewModel` makes that small component depend on the screen owner even though most of that API has nothing to do with rendering the component.
-
-The boundary can stay much smaller:
-
-```kotlin
-CheckoutRoute(viewModel = viewModel)
-    ↓
-CheckoutScreen(
-    state = uiState,
-    onPay = viewModel::pay,
-)
-    ↓
-PaymentSummary(
-    total = state.total,
-    onPay = onPay,
-)
+```text
+HomeScreen
+    ↓ analytics
+Feed
+    ↓ analytics
+ArticleCard
+    ↓ analytics
+ArticleActions
+    ↓ uses analytics
 ```
 
-Now the route knows about the `ViewModel`, the screen knows about screen state and events, and `PaymentSummary` only knows what it needs to render and report back.
+Once that pattern appears across a large UI tree, a `CompositionLocal` can remove plumbing that is not helping those APIs describe their actual job.
 
-There is a little more wiring, but the code tells the story without requiring someone to search the tree for a provider. Six months later, the dependency is still visible from the code being changed.
-
-Now imagine a different pull request adds `LocalAppSpacing` inside the app theme.
-
-That review is different.
-
-Spacing belongs to the design system. Many unrelated components can use it, and a nested part of the UI may have a legitimate reason to provide a different spacing scale. `OrdersScreen` should not need a `spacing` parameter merely because an `OrderCard` several levels below follows the same visual rules as the rest of the app.
-
-Here the local is solving a real boundary problem: **the component depends on the UI around it, while the parents in between do not need to know about that value at all.**
-
-That difference is the production boundary worth protecting.
-
-The trouble usually starts when one useful local makes the next one look harmless:
+The app can provide the dependency near the part of the tree where it applies:
 
 ```kotlin
-LocalCheckoutViewModel.current
-LocalNavigator.current
-LocalAnalytics.current
-LocalFeatureState.current
+CompositionLocalProvider(
+    LocalAnalytics provides analytics
+) {
+    AppContent()
+}
 ```
 
-Each addition saves a parameter. Together they create components whose real requirements are spread across providers elsewhere in the tree.
+and a descendant that genuinely needs it can read it:
 
-That cost tends to appear later. A component is moved to another screen and suddenly a provider is missing. A preview needs setup that has nothing to do with the UI being previewed. A test has to recreate several surrounding values before the component can render. A developer opens a composable and cannot tell what it needs from the function signature alone.
+```kotlin
+val analytics = LocalAnalytics.current
+```
 
-This does not mean every non-visual `CompositionLocal` is wrong. Framework and library code sometimes has context that genuinely belongs to a whole subtree. The important part is being able to explain **why that context belongs to the UI tree rather than to a particular feature or component**.
+That is the useful side of the API. The value belongs to a broad part of the UI tree, many layers may sit between the provider and the consumer, and those middle layers should not need parameters for something they never use.
 
-A practical review can work through a few questions:
+Now let the app grow.
 
-1. **Who actually needs the value?** If it belongs to one component or one small feature boundary, a normal parameter is usually clearer.
-2. **Are the composables in between using it or only carrying it?** Carrying genuine UI-wide context is where a local starts to earn its place.
-3. **Would a nested part of the UI ever need a different value?** If that kind of override makes sense, the UI tree may be a natural place to scope it.
-4. **What happens to reuse, previews, and tests?** A small component should not need half the application environment just to render.
-5. **Is the design getting clearer, or is the parameter list merely getting shorter?** A shorter call site is not automatically a better boundary.
+A feature needs a repository:
 
-And if a component has an uncomfortable number of parameters, that is worth investigating before introducing a `CompositionLocal`. The component may be doing too much. Several values may belong together in a clearer UI model. An event may belong at a different boundary.
+```kotlin
+val repository = LocalRepository.current
+```
 
-Sometimes the boring parameter is still the better design because it makes the dependency obvious.
+Then another screen needs its `ViewModel`:
 
-That is the mature use of `CompositionLocal`: not trying to remove every bit of wiring, but recognising the smaller set of values where **the surrounding UI really is the right place for that context to live**.
+```kotlin
+val viewModel = LocalProfileViewModel.current
+```
+
+Then mutable feature state follows:
+
+```kotlin
+val checkoutState = LocalCheckoutState.current
+```
+
+The code may look convenient because parameter lists get shorter, but something important has changed.
+
+Open this composable:
+
+```kotlin
+@Composable
+fun CheckoutSummary() {
+    // ...
+}
+```
+
+Its function signature no longer tells the reader what it depends on. To understand the screen, someone has to read the body and know which values happen to be available higher in the Composition.
+
+That becomes painful when the composable is reused somewhere else. It also makes previews and tests harder to understand because the missing dependency appears only when the code tries to read the `CompositionLocal`.
+
+For feature dependencies, direct parameters usually tell a clearer story:
+
+```kotlin
+@Composable
+fun CheckoutSummary(
+    state: CheckoutUiState,
+    onPay: () -> Unit
+) {
+    // ...
+}
+```
+
+Now the boundary is visible immediately. The composable says what it needs, and the caller decides where those values come from.
+
+This does not mean every `CompositionLocal` is suspicious. Compose itself uses them for things such as theme values, density, layout direction, and other context that naturally applies to a whole subtree.
+
+The useful question is:
+
+> **Does this value describe the environment this UI is running in, or is it just something this feature needs?**
+
+Theme, localization-like context, design-system values, or another dependency that genuinely applies across a large subtree can fit naturally.
+
+A repository needed by one feature, a screen's mutable state, or a callback that could simply be a parameter usually does not become better architecture by being hidden in the tree.
+
+There is also a useful test when introducing one:
+
+Imagine moving the composable into a different part of the app.
+
+If its parameters tell enough of the story and the surrounding UI environment can reasonably provide the rest, the `CompositionLocal` is probably serving its intended role.
+
+If moving it means discovering a trail of hidden feature dependencies one runtime failure at a time, too much has been placed there.
+
+The goal is not to avoid parameter passing.
+
+It is to avoid **meaningless parameter passing through layers that do not care about the value**, without hiding the dependencies that make a feature understandable.
 
 ## Follow-up questions
 

@@ -1,46 +1,405 @@
 ---
 id: "CMP-016"
 title: "What is SaveableStateHolder?"
-description: "What is SaveableStateHolder."
+description: "Understand how saveable UI state can stay attached to content that temporarily leaves the Composition and later comes back."
 difficulty: "advanced"
 track: "advanced"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
   - saveable-state
-prerequisites: []
-related: []
+  - state-lifetime
+  - navigation
+  - compose-runtime
+prerequisites:
+  - CMP-005
+related:
+  - CMP-006
+  - CMP-010
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+`SaveableStateHolder` is useful when a piece of UI can **leave the Composition without being finished**.
 
-## Short interview answer
+Imagine a navigation entry or tab that is not currently being shown but may come back later. The holder lets the owner give that UI a stable key, save the `rememberSaveable` state created inside it when the content disappears, and restore that state when the same key returns.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+It is not keeping the composable alive, and it is not a replacement for a `ViewModel`. It is about keeping small saveable UI state attached to the same UI identity while that content moves in and out of the Composition.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
 
-## Code example
+The interviewer is really testing whether you understand **the difference between UI being temporarily absent and UI being finished**.
 
-{/* Include a focused example only when code makes the answer clearer. */}
+A stronger answer goes beyond saying that `SaveableStateHolder` saves `rememberSaveable` values. It explains why the state needs a stable identity to belong to, and why the code that owns that identity is usually the right place to manage its saved state.
 
-## Common mistakes
+## ❌ Common mistake
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+<CommonMistake>
+
+> "`SaveableStateHolder` keeps the screen and its state alive while the screen is not visible."
+
+The screen does not need to stay alive.
+
+Suppose a custom container shows one destination at a time:
+
+```kotlin
+when (currentEntry) {
+    Home -> HomeScreen()
+    Search -> SearchScreen()
+}
+```
+
+When `HomeScreen` is no longer part of that branch, its composition can go away.
+
+`SaveableStateHolder` does not freeze that composition somewhere in memory. Instead, content can be given a key:
+
+```kotlin
+holder.SaveableStateProvider(entryId) {
+    HomeScreen()
+}
+```
+
+If `HomeScreen` creates state with `rememberSaveable`, the holder can keep the saved value associated with `entryId` when that content leaves. If the same `entryId` is composed again later, that saved state can be restored.
+
+That is a very different idea from keeping the old composable alive.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a simple app with two tabs:
+
+```text
+Home
+Search
+```
+
+Home has a list and a search field. The user types `"compose"`, scrolls halfway down the list, switches to Search, then comes back to Home.
+
+From the user's point of view, this is still Home. They expect to come back to the same search and roughly the same place in the list.
+
+But suppose the app only composes the selected tab:
+
+```kotlin
+when (currentTab) {
+    Tab.Home -> HomeScreen()
+    Tab.Search -> SearchScreen()
+}
+```
+
+When Search is selected, `HomeScreen` leaves the Composition.
+
+That distinction matters. Home may still exist as a tab in the app, but the composable that was rendering it is no longer there.
+
+State created with `remember` belongs to that composition:
+
+```kotlin
+var query by remember {
+    mutableStateOf("")
+}
+```
+
+If that composition is gone, the remembered value is gone with it.
+
+For state that should be restored, the screen can use `rememberSaveable`:
+
+```kotlin
+var query by rememberSaveable {
+    mutableStateOf("")
+}
+```
+
+Now the value knows how to participate in saved-state restoration. But there is still a question above the screen itself:
+
+> **When Home comes back, who says that this is the same Home that owned that saved state before?**
+
+This is the problem `SaveableStateHolder` helps with.
+
+The code that switches between the tabs can create a holder:
+
+```kotlin
+val stateHolder = rememberSaveableStateHolder()
+```
+
+and give each tab a key:
+
+```kotlin
+stateHolder.SaveableStateProvider(currentTab) {
+    when (currentTab) {
+        Tab.Home -> HomeScreen()
+        Tab.Search -> SearchScreen()
+    }
+}
+```
+
+Now there is a simple relationship:
+
+```text
+Home
+  ↓
+state saved for Home
+
+Search
+  ↓
+state saved for Search
+```
+
+When Home leaves the Composition, its saveable state can be kept under the Home key. When Home is shown again with that same key, the state can be restored.
+
+<Remember>
+
+**`rememberSaveable` makes a value restorable. `SaveableStateHolder` helps that saved state find the same piece of UI again after the UI leaves the Composition and comes back.**
+
+</Remember>
+
+The key becomes more important once the app can have more than one instance of the same kind of screen.
+
+Suppose the app can open:
+
+```text
+Details(product = 42)
+Details(product = 73)
+```
+
+This would be too broad:
+
+```kotlin
+stateHolder.SaveableStateProvider("details") {
+    DetailsScreen(productId)
+}
+```
+
+Both details screens would be presented as the same piece of UI.
+
+Instead, the key should represent the actual entry that may come back:
+
+```kotlin
+stateHolder.SaveableStateProvider(entry.id) {
+    DetailsScreen(entry.productId)
+}
+```
+
+The useful way to think about the key is not "what string should this API receive?"
+
+It is:
+
+> **What makes this the same screen, tab, or entry when it comes back?**
+
+If the answer is the same key, the holder knows which saved state belongs there.
+
+There is one last part of the lifetime to consider.
+
+Suppose `Details(42)` is still in a back stack but another screen is currently on top of it. It is temporarily absent, so keeping its saved UI state makes sense.
+
+Later the user presses Back and `Details(42)` is permanently removed from that back stack. Now there is nothing to return to.
+
+That is when the owner can forget its state:
+
+```kotlin
+stateHolder.removeState(entry.id)
+```
+
+So `removeState` is not just cleanup. It represents a real change in the UI lifetime:
+
+```text
+temporarily not shown
+        ↓
+keep the saved state
+
+permanently removed
+        ↓
+forget the saved state
+```
+
+And the holder still does not change what counts as saveable state.
+
+Wrapping this:
+
+```kotlin
+val query = remember {
+    mutableStateOf("")
+}
+```
+
+in `SaveableStateProvider` does not make it restorable.
+
+The state still needs an appropriate saveable mechanism, such as:
+
+```kotlin
+var query by rememberSaveable {
+    mutableStateOf("")
+}
+```
+
+`rememberSaveable` handles the value. `SaveableStateHolder` handles the longer-lived place that value belongs to.
+
+## Production thinking
+
+A useful way to understand where `SaveableStateHolder` belongs is to build the problem up from a real app.
+
+Start with a simple tab switcher:
+
+```kotlin
+var currentTab by rememberSaveable {
+    mutableStateOf(Tab.Home)
+}
+
+when (currentTab) {
+    Tab.Home -> HomeScreen()
+    Tab.Search -> SearchScreen()
+}
+```
+
+That is perfectly reasonable while the tabs do not have local UI state that needs to return with them.
+
+Then Home gains a search field and a long list. Search gains its own filters and scroll position. The product requirement is simple: switching tabs should not make either tab feel like it started again.
+
+At that point, the code that switches the tabs has an important piece of knowledge:
+
+> Home still exists even while Search is being shown, and Search still exists while Home is being shown.
+
+That is the kind of situation where a holder can make sense:
+
+```kotlin
+val stateHolder = rememberSaveableStateHolder()
+
+stateHolder.SaveableStateProvider(currentTab) {
+    when (currentTab) {
+        Tab.Home -> HomeScreen()
+        Tab.Search -> SearchScreen()
+    }
+}
+```
+
+Notice where the holder lives. It is not inside `HomeScreen` trying to preserve itself.
+
+It sits with the code that knows which tabs exist and which one is currently being shown. That code knows whether Home is merely off-screen or actually gone.
+
+Now let the app grow a little.
+
+Suppose a tab can open a small back stack:
+
+```text
+Home
+Details(42)
+Details(73)
+```
+
+At this point the same idea still works, but the key can no longer mean only "details." Each entry needs to be distinguishable because each one may have its own scroll position, expanded sections, or partially entered UI state.
+
+The state should follow the entry that owns it:
+
+```kotlin
+stateHolder.SaveableStateProvider(entry.id) {
+    EntryContent(entry)
+}
+```
+
+Then when an entry is genuinely removed:
+
+```kotlin
+stateHolder.removeState(entry.id)
+```
+
+its saved UI state can go with it.
+
+This is the point where the example starts to reveal something important: the app is gradually building navigation behavior.
+
+It now has entries, stable keys, a back stack, rules for when entries stay alive, and rules for when they are removed.
+
+If the real application already uses Navigation, that infrastructure already knows those things. It knows which back-stack entry a destination belongs to and when that entry is finished. In that case, application screens usually should not create another `SaveableStateHolder` around every destination. Let the navigation layer manage the saved-state lifetime it already owns.
+
+Direct use becomes more interesting when the app is building this kind of behavior itself: a custom tab system, custom back stack, pager-like flow, or another piece of UI where several entries remain meaningful even though only some of them are currently composed.
+
+The next question is what should actually be saved.
+
+Imagine returning to `Details(42)`. The user may reasonably expect to find:
+
+```text
+the same scroll position
+the same selected tab
+the same expanded section
+the text they had entered
+```
+
+Those are small pieces of UI state that help put the user back where they were.
+
+That does not mean the app should save everything the screen happened to display:
+
+```text
+repository results
+database entities
+network responses
+the entire screen model
+```
+
+If that data already has a proper source of truth, let the normal architecture produce it again. Save enough UI state to restore the user's place, then rebuild the rest from the state owners that already exist.
+
+The same reasoning prevents another common overcorrection: moving every value into a `ViewModel` because the UI may disappear for a while.
+
+A scroll position is still UI state. An expanded section is still UI state. A selected tab does not become business state just because its composable temporarily leaves the Composition.
+
+So when this problem appears in a real app, work through it in this order:
+
+1. **What does the state represent?** Decide whether it is UI state or state that belongs to a longer-lived application owner.
+2. **Who knows whether this screen, tab, or entry still exists?** That is usually the code that should manage its saved-state lifetime.
+3. **What makes it the same thing when it comes back?** Use a key that follows that same entry.
+4. **Is it temporarily away or actually finished?** Keep state for the first case; forget it for the second.
+5. **Is Navigation or another framework already doing this work?** If so, use the lifetime it already provides instead of building another one beside it.
+
+The goal is not to keep as much state alive as possible.
+
+It is to keep the **small amount of UI state that makes returning feel continuous**, for exactly as long as the screen, tab, or entry it belongs to still exists.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is the difference between `remember` and `rememberSaveable`?](/android/handbook/jetpack-compose/what-is-the-difference-between-remember-and-remembersaveable)
+- [What is state hoisting and why is it useful?](/android/handbook/jetpack-compose/what-is-state-hoisting-and-why-is-it-useful)
+- [When should data loading happen in `LaunchedEffect` versus `ViewModel.init`?](/android/handbook/jetpack-compose/when-should-data-loading-happen-in-launchedeffect-versus-viewmodel-init)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains `SaveableStateHolder` as a **UI identity and lifetime** tool, not just an API that stores `rememberSaveable` values.
+- Understands that the composable can leave the Composition; the holder is keeping its saveable state, not the old composition itself.
+- Knows that restoration depends on a stable key representing the same logical piece of UI.
+- Separates temporary absence from permanent removal and understands why `removeState` belongs to the owner of that lifetime.
+- Lets Navigation or other infrastructure manage saveable-state scopes when that infrastructure already owns the content identity.
+- Keeps saved state focused on small UI state that restores the user's place instead of treating it as storage for the whole screen model.
+- Does not move UI state into a `ViewModel` merely because the UI may temporarily leave the Composition.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `SaveableStateHolder` keeps `rememberSaveable` state associated with keyed UI content that may leave the Composition and return later.
+- The same key represents the same saved-state identity.
+- The holder does not keep the composable alive and does not make ordinary `remember` state saveable.
+- Temporary absence and permanent removal are different: `removeState` is for state that should no longer come back.
+- Navigation and other keyed UI infrastructure may already manage this mechanism for application code.
+- Save small UI state that restores the user's place; keep application data with its proper state owner or source of truth.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [SaveableStateHolder — Compose Runtime API reference](https://developer.android.com/reference/kotlin/androidx/compose/runtime/saveable/SaveableStateHolder)
+- [State lifespans in Compose — Android Developers](https://developer.android.com/develop/ui/compose/state-lifespans)
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Navigation 3 entry decorators — Android Developers](https://developer.android.com/guide/navigation/navigation-3/naventrydecorators)
+- [Hoist state with a ViewModel — Android Developers](https://developer.android.com/develop/ui/compose/state-hoisting)
+
+</ReferenceList>
