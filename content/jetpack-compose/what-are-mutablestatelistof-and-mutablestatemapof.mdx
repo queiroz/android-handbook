@@ -1,46 +1,379 @@
 ---
 id: "CMP-015"
 title: "What are mutableStateListOf and mutableStateMapOf?"
-description: "What are mutableStateListOf and mutableStateMapOf."
+description: "Understand when Compose can see changes inside a mutable collection and when replacing an immutable collection is clearer."
 difficulty: "advanced"
 track: "advanced"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
   - snapshot-state
-prerequisites: []
-related: []
+  - state
+  - collections
+  - compose-runtime
+prerequisites:
+  - CMP-004
+  - CMP-013
+related:
+  - CMP-005
+  - CMP-011
+  - CMP-012
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+A normal mutable list can change without Compose knowing anything happened. `mutableStateListOf` is useful when the list itself is UI state: adding, removing, or replacing an item becomes something Compose can observe. `mutableStateMapOf` does the same thing for keyed data.
 
-## Short interview answer
+The important boundary is that Compose is observing changes to the collection. It does not automatically start observing normal mutable properties inside the objects stored in it.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+So these APIs are useful when the collection itself needs observable changes. If the state is already an immutable `List` that gets replaced with a new value, that is also a perfectly valid approach.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
 
-## Code example
+The interviewer is really testing whether you understand **what changed in a way Compose can actually see**.
 
-{/* Include a focused example only when code makes the answer clearer. */}
+Knowing that `mutableStateListOf` is an observable list is only the starting point. A stronger answer can explain where that observability stops, and why choosing a state-backed collection is different from making every object inside it observable.
 
-## Common mistakes
+## ❌ Common mistake
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+<CommonMistake>
+
+> "The list is a `mutableStateListOf`, so changing a property on one of its items will update the UI."
+
+Consider a list of selectable rows:
+
+```kotlin
+data class FilterItem(
+    val label: String,
+    var selected: Boolean,
+)
+
+val filters = mutableStateListOf(
+    FilterItem("Open", false),
+    FilterItem("Closed", false),
+)
+```
+
+Then this happens:
+
+```kotlin
+filters[0].selected = true
+```
+
+The code changed `selected`, but it did not change the state list. The same `FilterItem` object is still sitting at the same index, and `selected` is just a normal Kotlin property.
+
+A clearer model is to make the item immutable and replace the entry:
+
+```kotlin
+data class FilterItem(
+    val label: String,
+    val selected: Boolean,
+)
+
+filters[0] = filters[0].copy(
+    selected = true,
+)
+```
+
+Now something changed through the state list itself: the item at index `0` was replaced. That is a change Compose can observe.
+
+The collection being observable does not make everything stored inside it observable.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Start with a normal Kotlin list:
+
+```kotlin
+val tasks = mutableListOf(
+    "Pay invoice",
+    "Book hotel",
+)
+```
+
+Calling:
+
+```kotlin
+tasks.add("Buy tickets")
+```
+
+changes the list, but there is nothing about `MutableList` that tells Compose a piece of UI state changed.
+
+Even remembering that list does not change what kind of list it is:
+
+```kotlin
+val tasks = remember {
+    mutableListOf(
+        "Pay invoice",
+        "Book hotel",
+    )
+}
+```
+
+`remember` keeps that list instance around across recompositions. It does **not** make mutations to the list observable.
+
+If the UI owns a collection that is meant to change item by item, a state-backed collection can be a better fit:
+
+```kotlin
+val tasks = remember {
+    mutableStateListOf(
+        "Pay invoice",
+        "Book hotel",
+    )
+}
+```
+
+Now operations on the collection are part of Compose state:
+
+```kotlin
+tasks.add("Buy tickets")
+tasks.remove("Pay invoice")
+tasks[0] = "Book train"
+```
+
+The useful mental model is simple:
+
+```text
+MutableList
+  ↓
+the collection changes
+  ↓
+Compose does not automatically know
+
+SnapshotStateList
+  ↓
+the collection changes
+  ↓
+Compose can observe that change
+```
+
+`mutableStateMapOf` follows the same idea when the state is naturally keyed.
+
+Imagine a settings screen that owns which sections are expanded:
+
+```kotlin
+val expanded = remember {
+    mutableStateMapOf<String, Boolean>()
+}
+```
+
+Then:
+
+```kotlin
+expanded["notifications"] = true
+expanded["privacy"] = false
+```
+
+changes the state map itself, so UI reading those entries can react.
+
+There is no need to learn two different mental models. A state list is useful when observable state is naturally ordered; a state map is useful when it is naturally looked up by a key.
+
+<Remember>
+
+**A state-backed collection lets Compose see changes to the collection itself. It does not turn ordinary mutable objects inside that collection into Compose state.**
+
+</Remember>
+
+There is another comparison that often causes confusion:
+
+```kotlin
+var tasks by remember {
+    mutableStateOf<List<Task>>(emptyList())
+}
+```
+
+versus:
+
+```kotlin
+val tasks = remember {
+    mutableStateListOf<Task>()
+}
+```
+
+Both can produce correct UI, but they change state differently.
+
+With `mutableStateOf<List<Task>>`, the usual approach is to keep the list immutable and assign a new value:
+
+```kotlin
+tasks = tasks + newTask
+```
+
+Compose sees that `tasks` received a new list.
+
+With `mutableStateListOf`, the list itself can stay in place while its contents change:
+
+```kotlin
+tasks.add(newTask)
+```
+
+Compose can see the mutation because the collection participates in the snapshot system.
+
+The awkward middle ground is this:
+
+```kotlin
+var tasks by remember {
+    mutableStateOf(
+        mutableListOf<Task>(),
+    )
+}
+
+tasks.add(newTask)
+```
+
+`tasks` is stored in Compose state, but the value being held is still a normal mutable list. Adding an item changes that list internally; it does not assign a new value to `tasks`.
+
+So wrapping a normal mutable collection in `mutableStateOf` does not automatically make every mutation inside that collection observable.
+
+This is the same state boundary that appears elsewhere in Compose: the code needs to change something Compose is actually tracking.
+
+## Production thinking
+
+Suppose a pull request adds this to a filter panel:
+
+```kotlin
+val selectedFilters = remember {
+    mutableStateListOf<FilterId>()
+}
+```
+
+Before questioning the API, look at who owns the state.
+
+These selections exist only while this piece of UI is being edited. The UI adds and removes individual IDs, and Compose needs to react as the collection changes. A state list is doing exactly the job needed here: the collection itself is local UI state, and its individual mutations matter.
+
+Now suppose another pull request changes a task screen from an immutable `UiState` to a `SnapshotStateList<Task>` because "Compose handles state lists better."
+
+That deserves a different conversation.
+
+Imagine the screen state already looks like this:
+
+```kotlin
+data class TasksUiState(
+    val tasks: List<Task>,
+    val isLoading: Boolean,
+    val errorMessage: String?,
+)
+```
+
+The tasks come from Room through a repository, the `ViewModel` combines them with other state, and the UI renders the latest `TasksUiState`.
+
+In that design, replacing `tasks` with another immutable list is already a clear state change. The data naturally arrives as values over time, and the `ViewModel` already owns the screen state.
+
+Turning that list into a `SnapshotStateList` would not automatically make the architecture better. It would introduce another way for state to change without solving an ownership problem the screen actually has.
+
+That does **not** mean snapshot collections are only for state owned directly by a composable.
+
+A `ViewModel` can own one too:
+
+```kotlin
+class CartViewModel : ViewModel() {
+
+    private val _items = mutableStateListOf<CartItem>()
+
+    val items: List<CartItem>
+        get() = _items
+
+    fun removeItem(id: String) {
+        _items.removeAll { it.id == id }
+    }
+}
+```
+
+The useful question in review is not:
+
+> "Why is Compose state inside the `ViewModel`?"
+
+It is:
+
+> **Who is allowed to change this collection?**
+
+Here the answer is clear. The `ViewModel` owns the mutable collection. The UI can read the items and send events back, but it cannot add, remove, or clear items directly.
+
+Compare that with:
+
+```kotlin
+class CartViewModel : ViewModel() {
+    val items = mutableStateListOf<CartItem>()
+}
+```
+
+Now callers can do this:
+
+```kotlin
+viewModel.items.clear()
+viewModel.items.add(item)
+```
+
+Compose will observe those changes just fine. The problem is elsewhere: the part of the application that is supposed to own the cart no longer controls how the cart changes.
+
+That is the production boundary worth protecting.
+
+The same restraint helps with performance arguments.
+
+It can look wasteful to create another immutable list when one item changes, while a state list can update an entry directly. But that difference alone is not a reason to redesign a clear screen-state model.
+
+If an immutable `UiState` is easy to follow and performs well, there is no problem to solve. If profiling later shows that a large, frequently changing collection is genuinely expensive, then a more fine-grained state model can be considered with evidence.
+
+When a state collection appears in review, a few questions usually make the decision much easier:
+
+1. **Who owns this collection?** A temporary UI selection and a list produced from repositories do not necessarily need the same state model.
+2. **What needs to change?** Does the code naturally replace the whole value, or does it need observable add/remove/update operations on one collection?
+3. **Who can mutate it?** The owner should normally control changes rather than handing a writable collection to every caller.
+4. **Where does the data come from?** If the application already produces immutable values through repositories and `Flow`, converting them into a snapshot collection may not buy anything.
+5. **Is the collection actually changing?** If the real mutation is hidden inside an item, changing the collection type does not fix that problem.
+
+The sequence matters: **choose the owner first, understand what needs to change, then choose the collection model that makes those changes easiest to follow.**
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [How does state work in Jetpack Compose?](/android/handbook/jetpack-compose/how-does-state-work-in-jetpack-compose)
+- [What is the difference between `remember` and `rememberSaveable`?](/android/handbook/jetpack-compose/what-is-the-difference-between-remember-and-remembersaveable)
+- [What is the Compose snapshot system?](/android/handbook/jetpack-compose/what-is-the-compose-snapshot-system)
+- [What is `snapshotFlow`?](/android/handbook/jetpack-compose/what-is-snapshotflow)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains that `mutableStateListOf` and `mutableStateMapOf` make **collection mutations observable to Compose**, rather than just calling them "special mutable collections."
+- Knows that a state-backed collection does not automatically make normal mutable properties inside its items observable.
+- Can explain the difference between replacing an immutable `List` held in state and mutating a `SnapshotStateList`.
+- Separates `remember` from observability: remembering a normal mutable collection does not make its changes Compose state.
+- Chooses ownership before collection type and does not assume every list used by Compose should become a `SnapshotStateList`.
+- Keeps mutation controlled by the state owner instead of exposing writable collections across UI boundaries.
+- Treats performance as something to measure rather than assuming in-place mutation is automatically the better architecture.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `mutableStateListOf` and `mutableStateMapOf` create mutable collections whose changes participate in Compose's snapshot state system.
+- A normal `MutableList` or `MutableMap` can change without Compose automatically seeing that mutation.
+- `remember` keeps an object across recompositions; it does not make a normal collection observable.
+- A state-backed collection observes changes to the collection, not ordinary mutable fields hidden inside its items.
+- `mutableStateOf<List<T>>` and `mutableStateListOf<T>` can both be correct: one usually replaces the list value, while the other observes changes to the collection itself.
+- Ownership comes before collection type. The part of the application that owns the state should normally control its mutation.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [SnapshotStateList — Compose Runtime API reference](https://developer.android.com/reference/kotlin/androidx/compose/runtime/snapshots/SnapshotStateList)
+- [SnapshotStateMap — Compose Runtime API reference](https://developer.android.com/reference/kotlin/androidx/compose/runtime/snapshots/SnapshotStateMap)
+- [State in Jetpack Compose codelab — Android Developers](https://developer.android.com/codelabs/jetpack-compose-state)
+- [UI state production — Android app architecture](https://developer.android.com/topic/architecture/ui-layer/state-production)
+
+</ReferenceList>
