@@ -1,46 +1,459 @@
 ---
 id: "CMP-017"
 title: "What is the composition lifecycle?"
-description: "What is the composition lifecycle."
+description: "Understand when Compose starts keeping a part of the UI, what recomposition means while it remains there, and what happens when that part leaves."
 difficulty: "advanced"
 track: "advanced"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 8
+answerTime: "~45 sec"
+status: "published"
 tags:
-  - composition-lifecycle
-prerequisites: []
-related: []
+  - composition
+  - recomposition
+  - lifecycle
+  - state
+prerequisites:
+  - CMP-002
+  - CMP-003
+related:
+  - CMP-005
+  - CMP-009
+  - CMP-016
 ---
 
-## Why this matters
+<ShortAnswer>
 
-{/* Explain why this question appears in Android interviews. */}
+A useful way to think about the composition lifecycle is: **enter, recompose while needed, then leave**.
 
-## Short interview answer
+When a composable becomes part of the UI, Compose starts keeping track of that part in the Composition. While it remains there, changes to state it depends on may cause it to recompose, but recomposition does not mean it was removed and created again.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+When that part of the UI is no longer needed, it leaves the Composition. That boundary matters because things owned by that part of the UI, such as `remember` state and Composition-scoped effects, normally live for that same lifetime.
 
-## Explanation
+</ShortAnswer>
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+## What the interviewer is testing
 
-## Code example
+The interviewer is testing whether you can separate **recomposition** from **lifetime**.
 
-{/* Include a focused example only when code makes the answer clearer. */}
+A composable function may run many times while Compose is still keeping the same part of the UI. The important question is not simply how many times the function ran, but whether that part of the UI is still in the Composition or has actually left it.
 
-## Common mistakes
+That distinction is what lets you reason correctly about remembered state, effects, and cleanup.
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+## ❌ Common mistake
+
+<CommonMistake>
+
+> "The composable ran again, so it must have been created again."
+
+That is an easy conclusion to reach because composables are functions.
+
+For example:
+
+```kotlin
+@Composable
+fun OrderSummary(order: Order) {
+    Log.d("OrderSummary", "Running")
+
+    // ...
+}
+```
+
+If some state changes and `OrderSummary()` runs again, the log appears again.
+
+But that only tells you the function executed again.
+
+It does **not** mean `OrderSummary` left the Composition and then entered again. Compose may simply be updating a part of the UI it was already keeping.
+
+This is why a composable body should not be treated like an `Activity.onCreate()` callback. **Function execution and Composition lifetime are different things.**
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Start with the mental model from composition:
+
+> **Composition is the UI that Compose remembers between executions of your composable functions.**
+
+The lifecycle question is the next step:
+
+> **How long does Compose keep a particular part of that UI?**
+
+Imagine a checkout screen:
+
+```kotlin
+@Composable
+fun CheckoutScreen(
+    showSummary: Boolean
+) {
+    CheckoutForm()
+
+    if (showSummary) {
+        OrderSummary()
+    }
+}
+```
+
+Suppose the screen first runs with:
+
+```text
+showSummary = false
+```
+
+The UI Compose is keeping can be pictured like this:
+
+```text
+CheckoutScreen
+└── CheckoutForm
+```
+
+`OrderSummary` is not part of the UI yet.
+
+Later:
+
+```text
+showSummary = true
+```
+
+`CheckoutScreen()` runs again. This time the condition calls `OrderSummary()`.
+
+Now you can picture the Composition like this:
+
+```text
+CheckoutScreen
+├── CheckoutForm
+└── OrderSummary
+```
+
+Compose is now keeping track of `OrderSummary` as part of the current UI.
+
+**That is what it means for `OrderSummary` to enter the Composition.**
+
+Nothing is physically entering a container somewhere. It simply means that this part of the UI is now part of what Compose is remembering and managing.
+
+<Remember>
+
+**Entering the Composition means Compose starts keeping that part of the UI. Leaving means Compose stops keeping it.**
+
+</Remember>
+
+### So what is Compose actually remembering?
+
+It is worth looking just slightly beneath the mental model, because otherwise this can feel like magic.
+
+Compose is not remembering a screenshot, and it is not storing the finished result of `OrderSummary()`.
+
+As composable functions run, Compose keeps internal bookkeeping about the composable calls that make up the current Composition. During recomposition, the runtime uses that information to update the Composition and determine which parts are still present and which are no longer being produced.
+
+The runtime goes much deeper than that, but you do not need its internal data structures to understand the lifecycle.
+
+For this page, the useful picture is simply:
+
+```text
+your composable functions run
+            ↓
+Compose keeps track of the UI they describe
+            ↓
+that remembered UI is the Composition
+```
+
+Now suppose `OrderSummary` reads some state:
+
+```kotlin
+@Composable
+fun OrderSummary(
+    total: Money
+) {
+    Text("Total: $total")
+}
+```
+
+The total changes.
+
+Compose may run `OrderSummary()` again so the text can be updated.
+
+That is **recomposition**.
+
+But look at what happened to its lifecycle:
+
+```text
+OrderSummary enters
+        ↓
+Compose keeps it
+        ↓
+total changes
+        ↓
+OrderSummary recomposes
+        ↓
+Compose is still keeping it
+```
+
+It did not leave just because its function ran again.
+
+It may recompose many times while it remains part of the Composition. Compose may also skip running it during an update when there is nothing there that needs changing.
+
+Either way, it can still be part of the Composition.
+
+Now the user goes back to editing the checkout and:
+
+```text
+showSummary = false
+```
+
+The condition no longer calls `OrderSummary()`.
+
+The UI is back to:
+
+```text
+CheckoutScreen
+└── CheckoutForm
+```
+
+Compose no longer needs to keep `OrderSummary` as part of this Composition.
+
+**Now it has left the Composition.**
+
+So the lifecycle is easier to picture as:
+
+```text
+Compose starts keeping this part of the UI
+                  ↓
+                ENTER
+                  ↓
+       it may recompose 0..n times
+                  ↓
+     Compose is still keeping it
+                  ↓
+Compose stops keeping this part of the UI
+                  ↓
+                LEAVE
+```
+
+That is the distinction to hold onto.
+
+Recomposition is something that can happen **during** the lifetime.
+
+Leaving the Composition is what **ends** that lifetime.
+
+### Why does that matter for `remember`?
+
+Now the behaviour of `remember` becomes much easier to reason about:
+
+```kotlin
+@Composable
+fun OrderSummary() {
+    var expanded by remember {
+        mutableStateOf(false)
+    }
+
+    // ...
+}
+```
+
+When `OrderSummary` enters the Composition, Compose can keep that remembered value with its place in the Composition.
+
+If `OrderSummary` recomposes, Compose is still keeping that part of the UI, so the remembered value can be reused.
+
+```text
+OrderSummary enters
+        ↓
+expanded is remembered
+        ↓
+recomposition
+        ↓
+same remembered value
+        ↓
+recomposition
+        ↓
+same remembered value
+```
+
+When `OrderSummary` actually leaves the Composition, that remembered state no longer belongs to an active part of this Composition.
+
+If `OrderSummary` appears again later, that is a new Composition lifetime and plain `remember` should not be treated as though the previous one never ended.
+
+This is why understanding the lifecycle is more useful than counting how many times a composable function executes.
+
+## Production thinking
+
+Imagine you are building a shopping app and the checkout can show an optional promo-code section:
+
+```kotlin
+@Composable
+fun CheckoutScreen(
+    hasPromoCode: Boolean
+) {
+    CheckoutForm()
+
+    if (hasPromoCode) {
+        PromoCodeSection()
+    }
+}
+```
+
+Inside that section, the user can expand some help text:
+
+```kotlin
+@Composable
+fun PromoCodeSection() {
+    var showHelp by remember {
+        mutableStateOf(false)
+    }
+
+    // ...
+}
+```
+
+Now walk through what happens in the real screen.
+
+The user adds a promo code.
+
+```text
+hasPromoCode = true
+```
+
+`PromoCodeSection` enters the Composition and `showHelp` starts as `false`.
+
+The user opens the help text:
+
+```text
+showHelp = true
+```
+
+That state change can cause recomposition.
+
+Maybe the cart total also changes afterward and the checkout recomposes again.
+
+None of those updates mean the promo section disappeared.
+
+Compose is still keeping that part of the UI, so its remembered `showHelp` state stays with it.
+
+```text
+promo section appears
+        ↓
+showHelp = false
+        ↓
+user opens help
+        ↓
+showHelp = true
+        ↓
+checkout updates
+        ↓
+promo section recomposes
+        ↓
+showHelp is still true
+```
+
+Now the user removes the promo code.
+
+```text
+hasPromoCode = false
+```
+
+This is different.
+
+`PromoCodeSection()` is no longer called, so Compose stops keeping that part of the UI.
+
+The promo section has **left the Composition**.
+
+Its plain `remember` state belonged to that place in the Composition, so when the section is removed, that remembered value is forgotten.
+
+If the user adds a promo code again later, the section enters again:
+
+```text
+promo section enters
+        ↓
+showHelp = false
+```
+
+That is often exactly what you want for temporary UI state.
+
+But now imagine the product requirement changes:
+
+> "If the promo section disappears and comes back, restore whether the help was open."
+
+That requirement is telling you something important.
+
+The state now needs to survive **longer than this particular Composition lifetime**.
+
+At that point, plain `remember` is no longer enough. You would choose an owner or state-saving mechanism whose lifetime matches the behaviour you actually need.
+
+The same reasoning applies to effects.
+
+If some work should exist only while `PromoCodeSection` is part of the Composition, its lifetime can naturally follow that UI.
+
+If the work must continue after the promo section disappears, then that composable is too short-lived to own it.
+
+That is the production value of understanding the composition lifecycle.
+
+You stop asking:
+
+> "Which Compose API should I use?"
+
+and start with:
+
+> **"How long should this state or work live?"**
+
+Then you compare that requirement with the lifetime of the UI:
+
+```text
+Should it live only while this UI is present?
+        ↓
+Composition lifetime may be the right owner
+
+Should it survive this UI leaving?
+        ↓
+It needs a longer-lived owner or saving mechanism
+```
+
+That is the same ownership thinking that makes `remember`, effects, state holders, and navigation state much easier to reason about.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is composition?](/android/handbook/jetpack-compose/what-is-composition)
+- [What is recomposition and what triggers it?](/android/handbook/jetpack-compose/what-is-recomposition-and-what-triggers-it)
+- [What is the difference between `remember` and `rememberSaveable`?](/android/handbook/jetpack-compose/what-is-the-difference-between-remember-and-remembersaveable)
+- [What are side effects in Compose and how should they be handled?](/android/handbook/jetpack-compose/what-are-side-effects-in-compose-and-how-should-they-be-handled)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains the lifecycle as **enter → recompose zero or more times → leave**.
+- Makes it clear that recomposition does not mean a part of the UI was removed and created again.
+- Separates a composable function executing from the lifetime of the UI Compose is keeping.
+- Understands that `remember` state normally stays with that part of the UI while it remains in the Composition.
+- Knows that leaving the Composition is the important boundary for Composition-scoped state and effects.
+- Chooses where state or work should live by comparing the required lifetime with the lifetime of the UI that owns it.
+- Does not confuse Composition lifetime with Activity or Fragment lifecycle.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- Composition is the UI Compose remembers between executions of composable functions.
+- A part of the UI enters the Composition when Compose starts keeping it as part of that remembered UI.
+- It may recompose zero or more times while it remains there.
+- Recomposition does not mean that part of the UI left and entered again.
+- A part leaves the Composition when Compose stops keeping it because it is no longer part of the UI being produced.
+- `remember` state and Composition-scoped effects normally follow that Composition lifetime.
+- The practical engineering question is not how many times a composable ran, but **how long the state or work should live**.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Lifecycle of composables — Android Developers](https://developer.android.com/develop/ui/compose/lifecycle)
+- [Mental model of Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/mental-model)
+- [State and Jetpack Compose — Android Developers](https://developer.android.com/develop/ui/compose/state)
+- [Side-effects in Compose — Android Developers](https://developer.android.com/develop/ui/compose/side-effects)
+
+</ReferenceList>
