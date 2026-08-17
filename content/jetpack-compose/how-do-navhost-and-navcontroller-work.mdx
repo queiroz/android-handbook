@@ -1,46 +1,370 @@
 ---
 id: "CMP-018"
 title: "How do NavHost and NavController work?"
-description: "How do NavHost and NavController work."
+description: "Understand how Navigation Compose keeps navigation history and turns that state into the screen the user sees."
 difficulty: "intermediate"
 track: "core"
 contentType: "interview-question"
-estimatedTime: 6
-status: "draft"
+estimatedTime: 7
+answerTime: "~45 sec"
+status: "published"
 tags:
   - navigation-compose
-prerequisites: []
-related: []
+  - navhost
+  - navcontroller
+  - back-stack
+prerequisites:
+  - CMP-017
+related:
+  - CMP-019
+  - CMP-016
 ---
+<ShortAnswer>
 
-## Why this matters
+`NavController` manages navigation state — where the user is and the back stack behind the current destination. `NavHost` is connected to that controller and defines the destinations this part of the app can show.
 
-{/* Explain why this question appears in Android interviews. */}
+When you call `navigate()`, the controller updates the back stack and a new destination becomes current. The `NavHost` then shows the composable registered for that destination.
 
-## Short interview answer
+Going Back works in the other direction: the current entry is removed and the previous destination becomes current again.
 
-{/* Write a concise answer that can be spoken in 30–60 seconds. */}
+</ShortAnswer>
 
-## Explanation
+## What the interviewer is testing
 
-{/* Add only the mental model and practical detail needed to understand the answer. */}
+This question is really checking whether you understand the responsibilities behind navigation, rather than just knowing how to call `navigate()`.
 
-## Code example
+The important distinction is that `NavController` manages navigation state and the back stack, while `NavHost` connects that state to the destinations the UI can show.
 
-{/* Include a focused example only when code makes the answer clearer. */}
+If you understand that relationship, the individual Navigation Compose APIs become much easier to reason about.
 
-## Common mistakes
+## ❌ Common mistake
 
-{/* Describe realistic candidate mistakes without inventing interview claims. */}
+<CommonMistake>
+
+> "If I want to go back to Product Details, I can just navigate to Product Details again."
+
+Imagine the user went through:
+
+```text
+Products
+   ↓
+ProductDetails
+   ↓
+Checkout
+```
+
+The navigation history looks like:
+
+```text
+[Products, ProductDetails, Checkout]
+```
+
+This history is what we usually call the **back stack**.
+
+If the user cancels checkout, what you normally want is:
+
+```text
+[Products, ProductDetails]
+```
+
+So you remove `Checkout`:
+
+```kotlin
+navController.popBackStack()
+```
+
+But if you do this instead:
+
+```kotlin
+navController.navigate(
+    ProductDetails(productId)
+)
+```
+
+you are not going back. You are navigating to Product Details again.
+
+Conceptually, the history can now look like:
+
+```text
+[Products, ProductDetails, Checkout, ProductDetails]
+```
+
+The user may see a familiar screen, but the navigation history is different.
+
+</CommonMistake>
+
+## If they ask you to elaborate
+
+Imagine a shopping app:
+
+```text
+Products → ProductDetails → Checkout
+```
+
+At the top level, the app creates a `NavController` and connects it to a `NavHost`:
+
+```kotlin
+val navController = rememberNavController()
+
+NavHost(
+    navController = navController,
+    startDestination = Products
+) {
+    composable<Products> {
+        ProductListScreen(
+            onProductClick = { productId ->
+                navController.navigate(ProductDetails(productId))
+            }
+        )
+    }
+
+    composable<ProductDetails> { backStackEntry ->
+        val route = backStackEntry.toRoute<ProductDetails>()
+
+        ProductDetailsScreen(
+            productId = route.productId,
+            onBack = navController::popBackStack,
+            onCheckout = {
+                navController.navigate(Checkout)
+            }
+        )
+    }
+
+    composable<Checkout> {
+        CheckoutScreen(
+            onBack = navController::popBackStack
+        )
+    }
+}
+```
+
+There are a few pieces working together here.
+
+The `NavHost` defines the destinations this part of the app knows about. Each `composable` entry connects a route to the UI that should be shown for that destination.
+
+The `NavController` keeps track of where the user currently is and the navigation history behind that destination.
+
+So when the user taps a product, `ProductListScreen` does not replace the UI itself. It reports what happened:
+
+```kotlin
+onProductClick(productId)
+```
+
+The navigation layer turns that into:
+
+```kotlin
+navController.navigate(ProductDetails(productId))
+```
+
+The controller updates its navigation state and `ProductDetails` becomes the current destination. Because the `NavHost` is connected to that controller, it shows the composable registered for `ProductDetails`.
+
+You can picture the whole flow as:
+
+```text
+user taps product
+      ↓
+onProductClick(productId)
+      ↓
+navController.navigate(ProductDetails(productId))
+      ↓
+NavController updates the back stack
+      ↓
+ProductDetails becomes the current destination
+      ↓
+NavHost shows ProductDetailsScreen
+```
+
+The back stack might now look like:
+
+```text
+Products
+ProductDetails("42")
+```
+
+If the user continues to checkout:
+
+```kotlin
+navController.navigate(Checkout)
+```
+
+the stack becomes:
+
+```text
+Products
+ProductDetails("42")
+Checkout
+```
+
+Then `popBackStack()` removes `Checkout`. `ProductDetails("42")` becomes current again, so the `NavHost` shows that destination.
+
+<Remember>
+
+**The useful mental model is: the `NavController` changes navigation state; the `NavHost` shows the destination that state points to.**
+
+</Remember>
+
+That is the relationship worth understanding. `NavHost` and `NavController` are not two unrelated APIs: one describes and hosts the destinations, while the other coordinates moving through them.
+
+## Production thinking
+
+Now imagine we're building that shopping app for production.
+
+It starts small:
+
+```text
+Products
+  ↓
+ProductDetails
+  ↓
+Checkout
+```
+
+It can be tempting to pass the `NavController` into every screen:
+
+```kotlin
+@Composable
+fun ProductListScreen(navController: NavController) {
+    // ...
+}
+```
+
+That works, but now `ProductListScreen` needs to know how the app navigates. As the screen grows, navigation decisions start leaking into UI code.
+
+A cleaner boundary is for the screen to report what happened:
+
+```kotlin
+@Composable
+fun ProductListScreen(
+    onProductClick: (String) -> Unit
+) {
+    // ...
+}
+```
+
+Then the navigation layer decides what that event means:
+
+```kotlin
+composable<Products> {
+    ProductListScreen(
+        onProductClick = { productId ->
+            navController.navigate(ProductDetails(productId))
+        }
+    )
+}
+```
+
+The distinction is small, but useful.
+
+The screen knows **a product was selected**. The navigation layer knows **selecting a product should open `ProductDetails`**.
+
+That also makes the screen easier to preview, reuse and test because it does not need a real `NavController` just to react to a click.
+
+The same idea applies to the data carried by a route. Suppose the user opens product `42`.
+
+It may be tempting to pass the entire `Product` through navigation. Usually the route only needs enough information to identify what should be opened:
+
+```kotlin
+@Serializable
+data class ProductDetails(
+    val productId: String
+)
+```
+
+Then:
+
+```kotlin
+navController.navigate(ProductDetails(productId))
+```
+
+The destination can use that ID to get the current product data from the appropriate state holder or data layer.
+
+That keeps navigation focused on **where the user is going**, rather than turning the back stack into another place for carrying application data.
+
+Now let the app grow:
+
+```text
+Home
+├── Search
+├── Products
+│   ├── ProductDetails
+│   └── Reviews
+├── Cart
+│   └── Checkout
+└── Account
+    ├── Orders
+    └── Settings
+```
+
+The mental model has not changed. There is still a `NavController` coordinating navigation state and a `NavHost` showing the current destination.
+
+What usually changes is how the graph is organised.
+
+Instead of leaving dozens of destinations in one huge block, related destinations can be grouped into smaller navigation-builder functions:
+
+```kotlin
+NavHost(
+    navController = navController,
+    startDestination = Home
+) {
+    homeGraph(navController)
+    productGraph(navController)
+    checkoutGraph(navController)
+    accountGraph(navController)
+}
+```
+
+You do not need that structure on day one. It becomes useful when the graph is large enough that one navigation file is difficult to understand or change safely.
+
+The practical rule is to keep navigation decisions near the navigation layer, let screens report user actions through callbacks, and pass small route arguments such as IDs rather than making navigation carry whole application objects.
+
+Then when somebody asks, "What should Back do from here?" or "Where should this deep link land?", you can reason about the navigation graph and back stack instead of hunting through screens for scattered `navigate()` calls.
 
 ## Follow-up questions
 
-{/* Add likely follow-ups and link to stable question IDs when available. */}
+<FollowUp>
 
-## Interviewer notes
+- [What is `SaveableStateHolder`?](/android/handbook/jetpack-compose/what-is-saveablestateholder)
+- [What is the composition lifecycle?](/android/handbook/jetpack-compose/what-is-the-composition-lifecycle)
 
-{/* Explain what stronger mid-level and senior answers demonstrate when the distinction is meaningful. */}
+</FollowUp>
+
+## What separates a senior answer
+
+<SeniorAnswer>
+
+- Explains that `NavController` owns navigation state and the back stack rather than describing it only as an object with navigation methods.
+- Explains that `NavHost` connects that navigation state to a graph of destinations and shows the currently active destination.
+- Understands that the graph and the back stack are different: one describes available destinations, the other describes the user's current navigation history.
+- Knows that `navigate()` adds/changes navigation history while going Back usually removes the current entry.
+- Keeps navigation mechanics near the navigation layer and lets reusable screens expose user actions through callbacks.
+- Creates additional `NavController`s only when there is a deliberate separate navigation flow.
+- Passes small identifiers through navigation instead of treating navigation as a transport for entire screen models.
+- Starts complicated navigation behavior by deciding what the resulting back stack should look like.
+
+</SeniorAnswer>
 
 ## Key takeaways
 
-{/* Keep this brief and interview-focused. */}
+<KeyTakeaways>
+
+- `NavController` owns navigation state and the back stack.
+- `NavHost` connects that state to the destinations and displays the active one.
+- The navigation graph describes where the user can go; the back stack describes where they have gone and where they are now.
+- `navigate()` and going Back are different history operations.
+- Screens are easier to reuse and test when they expose navigation-related actions through callbacks instead of depending directly on `NavController`.
+- Creating another `NavController` creates another navigation state/back stack, so controller ownership should be deliberate.
+- Treat navigation as state first; choose API calls based on the history the app actually needs.
+
+</KeyTakeaways>
+
+## Learn more
+
+<ReferenceList>
+
+- [Navigation with Compose — Android Developers](https://developer.android.com/develop/ui/compose/navigation)
+- [NavController — Android Developers](https://developer.android.com/guide/navigation/navcontroller)
+- [Back stack — Android Developers](https://developer.android.com/guide/navigation/backstack)
+- [Design your navigation graph — Android Developers](https://developer.android.com/guide/navigation/design)
+- [Test Navigation Compose — Android Developers](https://developer.android.com/guide/navigation/testing/compose)
+
+</ReferenceList>
